@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -18,10 +18,8 @@ import subprocess
 import shlex
 import threading
 import queue
-import argparse
 import json
 import xml.etree.ElementTree as et
-from sys import platform
 from time import localtime, strftime, time, sleep
 from helpers import Helpers
 
@@ -42,13 +40,14 @@ class ProStitcherController:
         "threads": 1,
         "source_dir": "",
         "target_dir": "",
-        "ffprobe_path": "ffprobe",
+        "ffprobe_path": "ffprobe.exe",
         "stitcher_path": "C:/Program Files (x86)/Insta360Stitcher/tools/prostitcher/ProStitcher.exe",
         "encode_use_hardware": 0,
         "decode_use_hardware": 1,
         "decode_use_hardware_count": 6,
         "blend_mode": "pano",
-        "codec": "h264",
+        "output_codec": "h264",
+        "output_format": "mp4",
         "width": 7680,
         "bitrate": 251658240,
         "min_recording_duration": 15,
@@ -119,6 +118,7 @@ class ProStitcherController:
         "output_fps": "29.97",
         "output_interpolation": "0",
         "output_codec": "h264",
+        "output_format": "mp4",
         "output_audio_type": "pano",
         "output_audio_device": "insta360",
         "gps_latitude": "0",
@@ -259,11 +259,16 @@ class ProStitcherController:
                         if returncode != 0:
                             explanation = ''
                             if returncode == -6:
-                                explanation = "Not all origin_x.mp4 files present"
-                            if returncode == 235:
-                                explanation = "Source video not found"
-                            if returncode == 244:
-                                explanation = "Hardware encoding not supported"
+                                explanation = "Not all origin_x.mp4 files present."
+                            elif returncode == 235:
+                                explanation = "Source video not found."
+                            elif returncode == 244:
+                                if self.settings["encode_use_hardware"]:
+                                    explanation = "Hardware encoding not supported."
+                                else:
+                                    explanation = "Codec/Profile not supported."
+                            elif returncode == 4294967295:
+                                explanation = "Wrong output file format."
                             if explanation:
                                 self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).\n"
                                                f"    ProStitcher: {prostitcher}\n"
@@ -305,7 +310,7 @@ class ProStitcherController:
         return duration, fps
 
 
-    def update_template(self, recording_name, duration, input_fps, recording_project_data, destination_file):
+    def update_template(self, recording_name, duration, input_fps, recording_project_data, output_destination):
         project = et.fromstring(recording_project_data)
         gravity_x = str(round(float(project.find("./gyro/calibration/gravity_x").text), 6))
         gravity_y = str(round(float(project.find("./gyro/calibration/gravity_y").text), 6))
@@ -325,7 +330,7 @@ class ProStitcherController:
         recording_parameters["source_dir"] = self.settings["source_dir"]
         recording_parameters["target_dir"] = self.settings["target_dir"]
         recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
-        recording_parameters["output_destination"] = destination_file
+        recording_parameters["output_destination"] = output_destination
         recording_parameters["recording_name"] = recording_name
         if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
             self.settings["trim_start"] = 0
@@ -373,35 +378,33 @@ class ProStitcherController:
             recording_parameters["blend_lens_selection"] = ProStitcherController.vr180_lens_selection
             recording_parameters["blend_vr180_yaw"] = ""
             recording_parameters["blend_angle_optical"] = "16"
-            recording_parameters["output_width"] = str(self.settings["width"])
-            recording_parameters["output_height"] = str(self.settings["width"] / 2)
+            recording_parameters["output_width"] = str(int(self.settings["width"]))
+            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
         elif self.settings["blend_mode"] == "vr180_4lens":
             recording_parameters["blend_lens_selection"] = "<lensSelection/>"
             recording_parameters["blend_vr180_yaw"] = 'vr180Yaw="180"'
             recording_parameters["blend_angle_optical"] = "16"
-            recording_parameters["output_width"] = str(self.settings["width"])
-            recording_parameters["output_height"] = str(self.settings["width"] / 2)
+            recording_parameters["output_width"] = str(int(self.settings["width"]))
+            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
         elif self.settings["blend_mode"] in ["stereo_top_left", "stereo_top_right"]:
             recording_parameters["blend_lens_selection"] = "<lensSelection/>"
             recording_parameters["blend_vr180_yaw"] = ""
             recording_parameters["blend_angle_optical"] = "!6"
-            recording_parameters["output_width"] = str(self.settings["width"])
-            recording_parameters["output_height"] = str(self.settings["width"])
+            recording_parameters["output_width"] = str(int(self.settings["width"]))
+            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
         else:
             recording_parameters["blend_lens_selection"] = "<lensSelection/>"
             recording_parameters["blend_vr180_yaw"] = ""
             recording_parameters["blend_angle_optical"] = "20"
-            recording_parameters["output_width"] = str(self.settings["width"])
-            recording_parameters["output_height"] = str(self.settings["width"] / 2)
-
+            recording_parameters["output_width"] = str(int(self.settings["width"]))
+            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
         recording_parameters["blend_capture_time"] = Helpers.parse_int(self.settings["reference_time"])
         if not recording_parameters["blend_capture_time"] or recording_parameters["blend_capture_time"] > duration or recording_parameters["blend_capture_time"] < 0:
             recording_parameters["blend_capture_time"] = Helpers.parse_int(duration/2)
-
-        recording_parameters["gyro_enable"] = 1 if self.settings["flowstate_stabilisation"] else 0
+        recording_parameters["gyro_enable"] = "1" if self.settings["flowstate_stabilisation"] else "0"
         recording_parameters["blend_smooth_stitch"] = "true" if self.settings["smooth_stitch"] else "false"
         recording_parameters["blend_original_offset"] = "true" if self.settings["original_offset"] else "false"
-        recording_parameters["blend_top_fixer"] = 1 if self.settings["zenith_optimisation"] else 0
+        recording_parameters["blend_top_fixer"] = "1" if self.settings["zenith_optimisation"] else "0"
         recording_parameters["blender_type"] = self.settings["blender_type"] or "auto"
         recording_parameters["encode_preset"] = self.settings["encode_preset"] or "superfast"
         recording_parameters["encode_profile"] = self.settings["encode_profile"] or "baseline"
@@ -409,29 +412,36 @@ class ProStitcherController:
         recording_parameters["encode_use_hardware"] = str(self.settings["encode_use_hardware"]) or "0"
         recording_parameters["decode_use_hardware"] = str(self.settings["decode_use_hardware"]) or "1"
         recording_parameters["decode_use_hardware_count"] = self.settings["decode_use_hardware_count"] or "6"
-        recording_parameters["output_bitrate"] = str(self.settings["bitrate"])
-        recording_parameters["output_codec"] = self.settings["codec"] or "h264"
+        recording_parameters["output_bitrate"] = str(self.settings["bitrate"]) or "503316480"
+        recording_parameters["output_codec"] = self.settings["output_codec"] or "h264"
+        recording_parameters["output_format"] = self.settings["output_format"] or "mp4"
         recording_parameters["output_audio_type"] = self.settings["audio_type"] or "pano"
-        recording_parameters["output_fps"] = str(self.settings["output_fps"])
-
+        recording_parameters["output_fps"] = str(self.settings["output_fps"]) or "29.97"
         if Helpers.parse_float(self.settings["output_fps"]) > Helpers.parse_float(input_fps):
             recording_parameters["output_interpolate"] = "1"
         else:
             recording_parameters["output_interpolate"] = "0"
+        recording_parameters["color_brightness"] = self.settings["brightness"] or "0"
+        recording_parameters["color_contrast"] = self.settings["contrast"] or "0"
+        recording_parameters["color_highlight"] = self.settings["highlight"] or "0"
+        recording_parameters["color_shadow"] = self.settings["shadow"] or "0"
+        recording_parameters["color_saturation"] = self.settings["saturation"] or "0"
+        recording_parameters["color_temperature"] = self.settings["temperature"] or "0"
+        recording_parameters["color_tint"] = self.settings["tint"] or "0"
+        recording_parameters["color_sharpness"] = self.settings["sharpness"] or "0"
 
-        recording_parameters["color_brightness"] = self.settings["brightness"]
-        recording_parameters["color_contrast"] = self.settings["contrast"]
-        recording_parameters["color_highlight"] = self.settings["highlight"]
-        recording_parameters["color_shadow"] = self.settings["shadow"]
-        recording_parameters["color_saturation"] = self.settings["saturation"]
-        recording_parameters["color_temperature"] = self.settings["temperature"]
-        recording_parameters["color_tint"] = self.settings["tint"]
-        recording_parameters["color_sharpness"] = self.settings["sharpness"]
-
-        if self.settings["codec"] == "prores":
+        # fix known settings constraints
+        if sys.platform == "darwin" and recording_parameters["blender_type"] == "cuda":
+            # cuda not supported on mac
+            recording_parameters["blender_type"] = "opencl"
+        if self.settings["output_codec"] == "prores":
+            # prores only supports encode_profile=3
             recording_parameters["encode_profile"] = "3"
-        else:
-            recording_parameters["encode_profile"] = self.settings["encode_profile"]
+            # prores only supports output_format=mov
+            recording_parameters["output_format"] = "mov"
+        elif self.settings["output_codec"] == "h265" and self.settings["encode_profile"] == "baseline":
+            # h265 encoding crashes with encode_profile=baseline. Set encode_profile=main
+            recording_parameters["encode_profile"] = "main"
 
         # replace parameters in template
         recording_template = ProStitcherController.default_template
@@ -457,7 +467,8 @@ class ProStitcherController:
             # create file paths
             tempdir = tempfile.gettempdir()
             recording_project_file = os.path.join(self.settings["source_dir"], recording, "pro.prj")
-            destination_file = os.path.join(self.settings["target_dir"], recording + "_{}.mp4".format(t))
+            destination_file = "{}_{}.{}".format(recording, t, self.settings["output_format"])
+            output_destination = os.path.join(self.settings["target_dir"], destination_file)
             project_filepath = os.path.join(tempdir, recording + "_{}_project.xml".format(t))
             template_filepath = os.path.join(tempdir, recording + "_{}_template.xml".format(t))
             recording_logfile = os.path.join(tempdir, recording + "_{}_stitcher.log".format(t))
@@ -477,13 +488,13 @@ class ProStitcherController:
 
                 # create stitching template for this recording
                 recording_template = self.update_template(recording, int(duration), fps, recording_project_data,
-                                                          destination_file)
+                                                          output_destination)
                 Helpers.write_file(template_filepath, recording_template)
 
                 # stitch
                 self._log_info("Stitching {} (duration: {}s) ".format(recording, int(stitching_duration)))
-                t1 = time()
                 if not self._stopping:
+                    t1 = time()
                     result = self._run_prostitcher(self.settings["stitcher_path"],
                                          tempdir,
                                          os.path.abspath(template_filepath),
@@ -544,6 +555,7 @@ class ProStitcherController:
         self.settings["decode_use_hardware"] = Helpers.parse_int(self.settings["decode_use_hardware"])
         self.settings["width"] = Helpers.parse_int(self.settings["width"])
         self.settings["bitrate"] = Helpers.parse_int(self.settings["bitrate"])
+        self.settings["bitrate_mbps"] = int(self.settings["bitrate"]/1024/1024)
         self.settings["min_recording_duration"] = Helpers.parse_int(self.settings["min_recording_duration"])
         self.settings["trim_start"] = Helpers.parse_int(self.settings["trim_start"])
         self.settings["trim_end"] = Helpers.parse_int(self.settings["trim_end"])
@@ -593,7 +605,7 @@ class ProStitcherController:
                 self.q.join()  # blocking
                 self._stop_workers(_workers)
 
-                self._log_info('Stitching complete. \n')
+                self._log_info('Done. \n')
             except Exception as e:
                 error = "Error processing recordings: {}".format((e))
                 self._log_error(error)

@@ -1,0 +1,27 @@
+
+# Editor directories and files
+.idea
+.idea/
+../.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store*
+__pycache__
+
+# Python virtual env
+env/
+venv/
+
+# Image files
+*.img
+*.img.zip
+*.zip
+*.dmg
+*.pkg
+*.exe
+
+# pyinstaller folders
+dist/*
+build/*

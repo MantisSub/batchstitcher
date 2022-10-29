@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -24,7 +24,7 @@ from prostitchercontroller import ProStitcherController
 from time import sleep
 
 
-class  BatchStitcher():
+class BatchStitcher():
 
     def __init__(self):
         self.inifile_name = "batchstitcher.ini"
@@ -66,6 +66,8 @@ class  BatchStitcher():
 
         # Scripts running under py2exe do not have a __file__ global
         default_inifile_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), self.inifile_name)
+        if not os.path.exists(default_inifile_path):
+            default_inifile_path = self.inifile_name
         try:
             inifile_dir = os.path.join(Helpers.get_datadir(), "BatchStitcher")
             self.inifile_path = os.path.join(inifile_dir, self.inifile_name)
@@ -120,9 +122,9 @@ class  BatchStitcher():
             self.settings_widgets[k] = None
             self.settings_labels[k] = None
             self.settings_buttons[k] = None
-        self.settings_stringvars["bitrate_mbps"] = tk.StringVar(value=str(int(int(self.settings["bitrate"])/1024/1024)))
         for k in self.intvar_keys:
             self.settings_intvars[k] = tk.IntVar(value=Helpers.parse_int(self.settings[k]))
+        self.settings_intvars["bitrate_mbps"] = tk.IntVar(value=int(Helpers.parse_int(self.settings["bitrate"])/1024/1024))
 
         if platform == "darwin":
             self.editor_width = 25
@@ -311,7 +313,7 @@ class  BatchStitcher():
         title = 'About Batch Stitcher'
         message = (
             'Batch Stitcher for Insta360 Pro 2 by Axel Busch\n'
-            'Version 0.0.2\n'
+            'Version 0.0.3\n'
             '\n'
             'Provided by Mantis Sub underwater housing for Pro 2\n'
             'Visit https://www.mantis-sub.com/'
@@ -332,25 +334,49 @@ class  BatchStitcher():
             sleep(0.1)
         self.root.quit()
 
-    def _on_save(self, quiet=False):
+    def _on_save(self, to_file=False, quiet=False):
+        result = False
         for k in self.settings_stringvars.keys():
-            self.settings[k] = self.settings_stringvars[k].get()
+            try:
+                self.settings[k] = self.settings_stringvars[k].get()
+            except Exception as e:
+                if not quiet:
+                    messagebox.showwarning(title="Warning", message=f"Could not save setting {k}: {str(e)}")
+                else:
+                    print(f"fCould not save setting {k}: {str(e)}")
         for k in self.intvar_keys:
-            self.settings[k] = self.settings_intvars[k].get()
-        if self.settings.get("bitrate_mpbs"):
-            self.settings["bitrate"] = Helpers.parse_int(self.settings_intvars["bitrate_mpbs"]) * 1024 * 1024
-        # if platform == "darwin":
-        #     if self.settings["blender_type"] == "cuda":
-        #         # cuda not supported on mac
-        #         self.settings["blender_type"] = "opencl"
-
-        if Helpers.write_config(self.inifile_path, self.settings):
-            if not quiet:
-                messagebox.showinfo(title="Info", message="Settings saved.")
-            return True
+            try:
+                self.settings[k] = self.settings_intvars[k].get()
+            except Exception as e:
+                if not quiet:
+                    messagebox.showwarning(title="Warning", message=f"Could not save setting {k}: {str(e)}")
+                else:
+                    print(f"fCould not save setting {k}:: {str(e)}")
+        if self.settings_intvars.get("bitrate_mbps"):
+            try:
+                self.settings["bitrate"] = Helpers.parse_int(self.settings_intvars["bitrate_mbps"].get()) * 1024 * 1024
+            except Exception as e:
+                if not quiet:
+                    messagebox.showwarning(title="Warning", message=f"fCould not save setting bitrate_mbps: {str(e)}")
+                else:
+                    print(f"fCould not save setting bitrate_mbps: {str(e)}")
+        if to_file:
+            # optional
+            try:
+                if Helpers.write_config(self.inifile_path, self.settings):
+                    if not quiet:
+                        messagebox.showinfo(title="Info", message="Settings saved.")
+                else:
+                    if not quiet:
+                        messagebox.showerror(title="Error", message="Could not save settings to file.")
+            except Exception as e:
+                if not quiet:
+                    messagebox.showerror(title="Error", message=f"Error saving settings to file: {str(e)}")
+                else:
+                    print("Error saving settings to file:", e)
         else:
-            messagebox.showerror(title="Error", message="Could not save settings.")
-            return False
+            result = True
+        return result
 
     def _clear_log(self):
         self.text_area.configure(state=tk.NORMAL)
@@ -368,21 +394,21 @@ class  BatchStitcher():
             self._clear_log()
             self.button_start.config(state=tk.DISABLED)
             self.button_cancel.config(state=tk.NORMAL)
-            if self._on_save(quiet=True):
+            self._on_save(to_file=True, quiet=True)
 
-                if not os.path.isdir(self.settings.get('source_dir')):
-                    messagebox.showwarning(title="Warning", message="No valid source folder selected.")
-                elif not os.path.isdir(self.settings.get('target_dir')):
-                    messagebox.showwarning(title="Warning", message="No valid target folder selected.")
-                elif not os.path.isfile(self.settings.get('stitcher_path')):
-                    messagebox.showwarning(title="Warning", message="No ProStitcher executable selected.")
-                elif not os.path.isfile(self.settings.get('ffprobe_path')):
-                    messagebox.showwarning(title="Warning", message="No ffprobe executable selected.")
-                else:
-                    self._stitching_thread = threading.Thread(target=start_stitcher)
-                    if self._stitching_thread:
-                        self._stitching_thread.start()
-                        self._can_quit = False
+            if not os.path.isdir(self.settings.get('source_dir')):
+                messagebox.showwarning(title="Warning", message="No valid source folder selected.")
+            elif not os.path.isdir(self.settings.get('target_dir')):
+                messagebox.showwarning(title="Warning", message="No valid target folder selected.")
+            elif not os.path.isfile(self.settings.get('stitcher_path')):
+                messagebox.showwarning(title="Warning", message="No ProStitcher executable selected.")
+            elif not os.path.isfile(self.settings.get('ffprobe_path')):
+                messagebox.showwarning(title="Warning", message="No ffprobe executable selected.")
+            else:
+                self._stitching_thread = threading.Thread(target=start_stitcher)
+                if self._stitching_thread:
+                    self._stitching_thread.start()
+                    self._can_quit = False
         finally:
             if not self._is_stitching_thread_alive():
                 self._stitcher = None
@@ -456,7 +482,6 @@ class  BatchStitcher():
 
         row_s = 0
         ttk.Label(self.scroll_frame, text="Setup", anchor='e').grid(row=row_s, column=0,padx=2, pady=8,sticky="e")
-        #ttk.Separator(self.scroll_frame, orient='horizontal').grid(row=row_s, column=1, columnspan=2, padx=2, pady=8, sticky="ew")
 
         settings_with_buttons = [("source_dir", 'Source folder:',self._on_select_source_dir),
                                  ("target_dir", 'Output folder:', self._on_select_target_dir),
@@ -541,9 +566,9 @@ class  BatchStitcher():
         k = "blender_type"
         blender_type_values = ("auto", "cuda", "opencl", "cpu")
         blender_type_label = "Cuda only on Nvidia cards"
-        # if platform == "darwin":
-        #     blender_type_values = ("auto", "opencl", "cpu")
-        #     blender_type_label = "opencl for best performance on macOS"
+        if platform == "darwin":
+            blender_type_values = ("auto", "opencl", "cpu")
+            blender_type_label = "opencl for best performance on macOS"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Blender type:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
@@ -652,7 +677,6 @@ class  BatchStitcher():
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="-180 to 180 Degrees, default 0", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
-
         row_s += 1
         ttk.Label(self.scroll_frame, text="Color", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
         color_settings = ["brightness", "contrast", "highlight", "shadow", "saturation", "temperature", "tint", "sharpness"]
@@ -670,8 +694,19 @@ class  BatchStitcher():
         ttk.Label(self.scroll_frame, text="Output", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
 
         row_s += 1
-        k = "codec"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Codec:", anchor='e', width=25)
+        k = "output_format"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="File format:", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+                                                textvariable=self.settings_stringvars[k],
+                                                values=("mp4", "mov",))
+        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="default is mp4, prores requires mov", anchor='w').grid(row=row_s, column=2, padx=2, pady=2,sticky="w")
+
+        row_s += 1
+        k = "output_codec"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Codec type:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
@@ -689,6 +724,28 @@ class  BatchStitcher():
         ttk.Label(self.scroll_frame, text="Not supported for all modes on all platforms", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
+        k = "encode_profile"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Encoding profile", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+                                                textvariable=self.settings_stringvars[k],
+                                                values=("baseline", "main", "high"))
+        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Default is baseline", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        row_s += 1
+
+        k = "encode_preset"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Encoding speed", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+                                                textvariable=self.settings_stringvars[k],
+                                                values=("superfast", "veryfast", "faster", "fast", "medium"))
+        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Default is superfast", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
+        row_s += 1
         k = "width"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Width:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
@@ -700,15 +757,15 @@ class  BatchStitcher():
         ttk.Label(self.scroll_frame, text="Height is set automatically", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        k = "bitrate"
+        k = "bitrate_mbps"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Bitrate:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
-                                                textvariable=self.settings_stringvars["bitrate_mbps"],
+                                                textvariable=self.settings_intvars[k],
                                                 values=("60", "120", "240", "480", "960", "1920", "4090"))
         self.settings_widgets[k].config(width=self.editor_width-2)
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Mbps", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Mbps. Use 1920 or higher for prores.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         k = "output_fps"
@@ -721,27 +778,6 @@ class  BatchStitcher():
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is recording frame rate", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
-
-        row_s += 1
-        k = "encode_preset"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Encoding speed", anchor='e', width=25)
-        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
-        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
-                                                textvariable=self.settings_stringvars[k],
-                                                values=("superfast", "veryfast", "faster", "fast", "medium"))
-        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
-        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Default is superfast", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-        row_s += 1
-        k = "encode_profile"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Encoding profile", anchor='e', width=25)
-        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
-        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
-                                                textvariable=self.settings_stringvars[k],
-                                                values=("baseline", "main", "high"))
-        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
-        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Default is baseline", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
         row_s += 1
         k = "audio_type"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Audio type", anchor='e', width=25)
@@ -752,8 +788,6 @@ class  BatchStitcher():
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is pano (= Spatial)", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-
-
 
 
         row_s += 1
@@ -816,7 +850,7 @@ class  BatchStitcher():
 
 
 def run():
-    b =  BatchStitcher()
+    b = BatchStitcher()
     b.init()
     b.show()
 

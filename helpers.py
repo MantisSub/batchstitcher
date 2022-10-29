@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2022, Mantis Sub, Xlvisuals Limited"
+__copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.2"
-__email__ = "info@mantis-sub.com"
+__version__ = "0.0.3"
+__email__ = "info@xlvisuals.com"
 
 import sys
 import shutil
