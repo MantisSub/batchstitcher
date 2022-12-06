@@ -4,7 +4,7 @@
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -251,19 +251,18 @@ class Helpers:
     @staticmethod
     def write_config(config_file, settings, section="DEFAULT"):
         try:
-            if os.path.isfile(config_file):
-                config = configparser.ConfigParser()
-                config[section] = {}
-                if not settings:
-                    settings = {}
-                for key in settings.keys():
-                    if settings.get(key) is not None:
-                        config[section][key] = str(settings.get(key))
-                    else:
-                        config[section][key] = ''
-                with open(config_file, "w") as file:
-                    config.write(file)
-                    file.close()
-                return True
+            config = configparser.ConfigParser()
+            config[section] = {}
+            if not settings:
+                settings = {}
+            for key in settings.keys():
+                if settings.get(key) is not None:
+                    config[section][key] = str(settings.get(key))
+                else:
+                    config[section][key] = ''
+            with open(config_file, "w") as file:
+                config.write(file)
+                file.close()
+            return True
         except Exception as e:
             print("Error writing config file: {}".format(str(e)))
