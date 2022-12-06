@@ -110,4 +110,4 @@ The following two settings are of special importance:
   - Please check if blender type "opencl" provides a faster stitch.
 - "Could not save settings" error message on windows.
   - Resolution: Copy the file "batchstitcher.ini" into the folder %APPDATA%/BatchStitcher
-  - [https://github.com/MantisSub/batchstitcher/releases/download/v0.0.3/batchstitcher.ini]
+  - https://github.com/MantisSub/batchstitcher/releases/download/v0.0.3/batchstitcher.ini
