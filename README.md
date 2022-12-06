@@ -108,3 +108,6 @@ The following two settings are of special importance:
 - The progress window shows the achieved stitching frame rate (fps) at the end of the stitching process. 
   - If the frame rate is below 1 fps it is likely that ProStitcher is using "cpu" blender type. 
   - Please check if blender type "opencl" provides a faster stitch.
+- "Could not save settings" error message on windows.
+  - Resolution: Copy the file "batchstitcher.ini" into the folder %APPDATA%/BatchStitcher
+  - [https://github.com/MantisSub/batchstitcher/releases/download/v0.0.3/batchstitcher.ini]
