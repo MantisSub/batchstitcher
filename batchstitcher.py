@@ -5,9 +5,9 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 """
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2022, Xlvisuals Limited"
+__copyright__ = "Copyright 2023, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -343,7 +343,7 @@ class BatchStitcher():
                 if not quiet:
                     messagebox.showwarning(title="Warning", message=f"Could not save setting {k}: {str(e)}")
                 else:
-                    print(f"fCould not save setting {k}: {str(e)}")
+                    print(f"Could not save setting {k}: {str(e)}")
         for k in self.intvar_keys:
             try:
                 self.settings[k] = self.settings_intvars[k].get()
@@ -351,19 +351,20 @@ class BatchStitcher():
                 if not quiet:
                     messagebox.showwarning(title="Warning", message=f"Could not save setting {k}: {str(e)}")
                 else:
-                    print(f"fCould not save setting {k}:: {str(e)}")
+                    print(f"Could not save setting {k}:: {str(e)}")
         if self.settings_intvars.get("bitrate_mbps"):
             try:
                 self.settings["bitrate"] = Helpers.parse_int(self.settings_intvars["bitrate_mbps"].get()) * 1024 * 1024
             except Exception as e:
                 if not quiet:
-                    messagebox.showwarning(title="Warning", message=f"fCould not save setting bitrate_mbps: {str(e)}")
+                    messagebox.showwarning(title="Warning", message=f"Could not save setting bitrate_mbps: {str(e)}")
                 else:
-                    print(f"fCould not save setting bitrate_mbps: {str(e)}")
+                    print(f"Could not save setting bitrate_mbps: {str(e)}")
         if to_file:
             # optional
             try:
                 if Helpers.write_config(self.inifile_path, self.settings):
+                    result = True
                     if not quiet:
                         messagebox.showinfo(title="Info", message="Settings saved.")
                 else:
@@ -459,7 +460,6 @@ class BatchStitcher():
                 self._unprocessed_logs.clear()
             finally:
                 self._lock.release()
-
 
     def done_callback(self):
         self.root.event_generate("<<done_callback>>")
