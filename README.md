@@ -5,11 +5,6 @@
 
 This is a Python3 program to stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings.
 
-
-## Requirements
-
-Batchstitcher is pure Python 3 code (>= Python 3.8) and does not require external libraries or compilation. 
-
 ## Installation
 
 ### From binaries
