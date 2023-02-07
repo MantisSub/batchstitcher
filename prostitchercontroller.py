@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.3"
+__version__ = "0.0.5"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -69,6 +69,7 @@ class ProStitcherController:
         "tint": 0,
         "sharpness": 0,
         "audio_type": "pano",
+        "audio_device": "insta360",
         "sampling_level": "medium",
         "encode_preset": "veryfast",
         "encode_profile": "main",
@@ -219,7 +220,7 @@ class ProStitcherController:
         self.q = queue.Queue()
         self._stopping = False
 
-    def _run_prostitcher(self, prostitcher, workingdir, templatefile, logfile):
+    def _run_prostitcher(self, prostitcher, workingdir, templatefile, logfile, parametersfile):
         returncode = -1
         try:
             cmd = f'"{prostitcher}" -l "{logfile}" -w stitch -x "{templatefile}"'
@@ -258,6 +259,7 @@ class ProStitcherController:
                     else:
                         if returncode != 0:
                             explanation = ''
+                            resolution = ''
                             if returncode == -6:
                                 explanation = "Not all origin_x.mp4 files present."
                             elif returncode == 235:
@@ -265,20 +267,27 @@ class ProStitcherController:
                             elif returncode == 244:
                                 if self.settings["encode_use_hardware"]:
                                     explanation = "Hardware encoding not supported."
+                                    resolution = "Please unset 'Use hardware encoding' and try again."
                                 else:
-                                    explanation = "Codec/Profile not supported."
-                            elif returncode == 4294967295:
+                                    explanation = "Codec/Profile/Bitrate combination not supported by hardware."
+                                    resolution = "Please try again with different settings for Codec/Profile/Bitrate."
+                            elif returncode == 4294967295 or returncode == -11:
                                 explanation = "Wrong output file format."
+                                resolution = "Please change the output file format and try again."
                             if explanation:
                                 self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).\n"
                                                f"    ProStitcher: {prostitcher}\n"
                                                f"    Template: {templatefile}\n"
-                                               f"    Logfile: {logfile}\n")
+                                               f"    Logfile: {logfile}\n"
+                                               f"    Settings: {parametersfile}\n")
                             else:
                                 self._log_info(f"WARNING. ProStitcher returned code {returncode}.\n"
                                                f"    ProStitcher: {prostitcher}\n"
                                                f"    Template: {templatefile}\n"
-                                               f"    Logfile: {logfile}\n")
+                                               f"    Logfile: {logfile}\n"
+                                               f"    Settings: {parametersfile}\n")
+                            if resolution:
+                                self._log_info(f"{resolution}\n")
 
                         break
         except OSError as e:
@@ -324,6 +333,10 @@ class ProStitcherController:
         start_ts_4 = project.find("./gyro/sts_group")[3].text
         start_ts_5 = project.find("./gyro/sts_group")[4].text
         start_ts_6 = project.find("./gyro/sts_group")[5].text
+        audio_device = project.find("./audio/@audio_device").text
+        spatial_audio = project.find("./audio/@spatial_audio")[5].text
+        audio_file = project.find("./audio/@audio_file")[5].text
+        audio_storage_loc = project.find("./audio/@storage_loc")[5].text
 
         # update template parameters
         recording_parameters = copy.deepcopy(ProStitcherController.default_parameters)
@@ -332,6 +345,10 @@ class ProStitcherController:
         recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
         recording_parameters["output_destination"] = output_destination
         recording_parameters["recording_name"] = recording_name
+        recording_parameters["audio_device"] = audio_device
+        recording_parameters["spatial_audio"] = spatial_audio
+        recording_parameters["audio_file"] = audio_file
+        recording_parameters["audio_storage_loc"] = audio_storage_loc
         if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
             self.settings["trim_start"] = 0
         else:
@@ -389,9 +406,9 @@ class ProStitcherController:
         elif self.settings["blend_mode"] in ["stereo_top_left", "stereo_top_right"]:
             recording_parameters["blend_lens_selection"] = "<lensSelection/>"
             recording_parameters["blend_vr180_yaw"] = ""
-            recording_parameters["blend_angle_optical"] = "!6"
+            recording_parameters["blend_angle_optical"] = "16"
             recording_parameters["output_width"] = str(int(self.settings["width"]))
-            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
+            recording_parameters["output_height"] = str(int(self.settings["width"]))
         else:
             recording_parameters["blend_lens_selection"] = "<lensSelection/>"
             recording_parameters["blend_vr180_yaw"] = ""
@@ -416,6 +433,7 @@ class ProStitcherController:
         recording_parameters["output_codec"] = self.settings["output_codec"] or "h264"
         recording_parameters["output_format"] = self.settings["output_format"] or "mp4"
         recording_parameters["output_audio_type"] = self.settings["audio_type"] or "pano"
+        recording_parameters["output_audio_device"] = self.settings["audio_device"] or "insta360"
         recording_parameters["output_fps"] = str(self.settings["output_fps"]) or "29.97"
         if Helpers.parse_float(self.settings["output_fps"]) > Helpers.parse_float(input_fps):
             recording_parameters["output_interpolate"] = "1"
@@ -455,7 +473,7 @@ class ProStitcherController:
         except:
             pass
 
-        return recording_template
+        return recording_template, recording_parameters
 
     def process_recording(self, recording):
         result = -1
@@ -472,6 +490,7 @@ class ProStitcherController:
             project_filepath = os.path.join(tempdir, recording + "_{}_project.xml".format(t))
             template_filepath = os.path.join(tempdir, recording + "_{}_template.xml".format(t))
             recording_logfile = os.path.join(tempdir, recording + "_{}_stitcher.log".format(t))
+            parameters_filepath = os.path.join(tempdir, recording + "_{}_parameters.json".format(t))
 
             if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
                 self.settings["trim_start"] = 0
@@ -487,9 +506,16 @@ class ProStitcherController:
                 Helpers.write_file(project_filepath, recording_project_data)
 
                 # create stitching template for this recording
-                recording_template = self.update_template(recording, int(duration), fps, recording_project_data,
-                                                          output_destination)
+                recording_template, recording_parameters = self.update_template(recording,
+                                                                                int(duration),
+                                                                                fps,
+                                                                                recording_project_data,
+                                                                                output_destination)
                 Helpers.write_file(template_filepath, recording_template)
+                try:
+                    Helpers.write_file(parameters_filepath, json.dumps(recording_parameters, indent=4))
+                except:
+                    pass
 
                 # stitch
                 self._log_info("Stitching {} (duration: {}s) ".format(recording, int(stitching_duration)))
@@ -498,7 +524,8 @@ class ProStitcherController:
                     result = self._run_prostitcher(self.settings["stitcher_path"],
                                          tempdir,
                                          os.path.abspath(template_filepath),
-                                         os.path.abspath(recording_logfile))
+                                         os.path.abspath(recording_logfile),
+                                         os.path.abspath(parameters_filepath))
                     if result == 0:
                         t2 = time()
                         t3 = int(t2 - t1)
@@ -604,7 +631,6 @@ class ProStitcherController:
                         self.q.put(r)
                 self.q.join()  # blocking
                 self._stop_workers(_workers)
-
                 self._log_info('Done. \n')
             except Exception as e:
                 error = "Error processing recordings: {}".format((e))

@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2023, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -158,11 +158,16 @@ class BatchStitcher():
         # Load and set theme
         if not self.root:
             self._init_tk()
-        self.root.tk.call('lappend', 'auto_path', self.themes_path)
-        for name in self.theme_names:
-            self.root.tk.call('package', 'require', name)
-        self.style = ttk.Style(self.root)
-        self.style.theme_use(self.theme_names[0])
+        if self.root:
+            self.root.tk.call('lappend', 'auto_path', self.themes_path)
+            try:
+                for name in self.theme_names:
+                    self.root.tk.call('package', 'require', name)
+                self.style = ttk.Style(self.root)
+                self.style.theme_use(self.theme_names[0])
+            except Exception as e:
+                print("Error setting up tk themes: ", e)
+                self.style = None
 
     def _on_mousewheel(self, event):
         self.scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -213,11 +218,17 @@ class BatchStitcher():
     def set_theme(self, index):
         if index >= len(self.theme_names):
             index = 0
-        self.style.theme_use(self.theme_names[index])
-        self.root.configure(bg=self.style.lookup('TFrame', 'background'))
-        self.parent_frame.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
-        self.scroll_canvas.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
-        self.scroll_frame.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
+        if self.style:
+            self.style.theme_use(self.theme_names[index])
+            self.root.configure(bg=self.style.lookup('TFrame', 'background'))
+            self.parent_frame.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
+            self.scroll_canvas.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
+            self.scroll_frame.configure(bg=self.style.lookup('TFrame', 'background') or 'grey')
+        else:
+            self.root.configure(bg='grey')
+            self.parent_frame.configure(bg='grey')
+            self.scroll_canvas.configure(bg='grey')
+            self.scroll_frame.configure(bg='grey')
 
     def toggle_theme(self):
         try:
@@ -313,7 +324,7 @@ class BatchStitcher():
         title = 'About Batch Stitcher'
         message = (
             'Batch Stitcher for Insta360 Pro 2 by Axel Busch\n'
-            'Version 0.0.3\n'
+            'Version 0.0.5\n'
             '\n'
             'Provided by Mantis Sub underwater housing for Pro 2\n'
             'Visit https://www.mantis-sub.com/'
@@ -335,7 +346,7 @@ class BatchStitcher():
         self.root.quit()
 
     def _on_save(self, to_file=False, quiet=False):
-        result = False
+        result = True
         for k in self.settings_stringvars.keys():
             try:
                 self.settings[k] = self.settings_stringvars[k].get()
@@ -360,23 +371,18 @@ class BatchStitcher():
                     messagebox.showwarning(title="Warning", message=f"Could not save setting bitrate_mbps: {str(e)}")
                 else:
                     print(f"Could not save setting bitrate_mbps: {str(e)}")
+
         if to_file:
             # optional
+            # We do this so next time the same settings are loaded as default. No important for next processing step.
             try:
                 if Helpers.write_config(self.inifile_path, self.settings):
-                    result = True
-                    if not quiet:
-                        messagebox.showinfo(title="Info", message="Settings saved.")
+                    self.log("Settings saved to file.")
                 else:
-                    if not quiet:
-                        messagebox.showerror(title="Error", message="Could not save settings to file.")
+                    self.log("Could not save settings to file.")
             except Exception as e:
-                if not quiet:
-                    messagebox.showerror(title="Error", message=f"Error saving settings to file: {str(e)}")
-                else:
-                    print("Error saving settings to file:", e)
-        else:
-            result = True
+                self.log(f"Error saving settings to file: {str(e)}")
+
         return result
 
     def _clear_log(self):
@@ -789,6 +795,17 @@ class BatchStitcher():
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is pano (= Spatial)", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
+        # Not needed. We can copy this setting from the pro.prj file
+        # row_s += 1
+        # k = "audio_device"
+        # self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Audio device", anchor='e', width=25)
+        # self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        # self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+        #                                         textvariable=self.settings_stringvars[k],
+        #                                         values=("insta360","H3-VR"))
+        # self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        # self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        # ttk.Label(self.scroll_frame, text="Default is insta360", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         ttk.Label(self.scroll_frame, text="Post processing", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
@@ -831,7 +848,7 @@ class BatchStitcher():
         ttk.Label(self.root, text="Progress", anchor='w').grid(row=row, column=0, padx=50, pady=(20,5), sticky="w")
 
         row += 1
-        self.text_area = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, height=8, bg='grey', fg='white')
+        self.text_area = scrolledtext.ScrolledText(self.root, wrap=tk.NONE, height=8, bg='grey', fg='white')
         self.text_area.config(state=tk.DISABLED)
         self.text_area.grid(column=0, row=row, columnspan=3, pady=10, padx=50, sticky="ew")
 

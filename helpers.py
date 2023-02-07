@@ -4,7 +4,7 @@
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -42,11 +42,17 @@ class Helpers:
         return free
 
     @staticmethod
-    def get_used_space(folders=()):
+    def get_used_space(folders=(), whole_disk=False):
         total_used = 0
         for f in folders:
-            total, used, free = shutil.disk_usage(f)
-            total_used += used
+            if whole_disk:
+                total, used, free = shutil.disk_usage(f)
+                total_used += used
+            else:
+                for path, dirs, files in os.walk(f):
+                    for f in files:
+                        fp = os.path.join(path, f)
+                        total_used += os.path.getsize(fp)
         return total_used
 
     @staticmethod
@@ -266,3 +272,5 @@ class Helpers:
             return True
         except Exception as e:
             print("Error writing config file: {}".format(str(e)))
+            return False
+
