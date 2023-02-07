@@ -320,59 +320,63 @@ class ProStitcherController:
 
 
     def update_template(self, recording_name, duration, input_fps, recording_project_data, output_destination):
-        project = et.fromstring(recording_project_data)
-        gravity_x = str(round(float(project.find("./gyro/calibration/gravity_x").text), 6))
-        gravity_y = str(round(float(project.find("./gyro/calibration/gravity_y").text), 6))
-        gravity_z = str(round(float(project.find("./gyro/calibration/gravity_z").text), 6))
-        offset_pano = project.find("./origin_offset/pano_4_3").text
-        offset_stereo_left = project.find("./origin_offset/pano_4_3").text
-        offset_stereo_right = project.find("./origin_offset/pano_16_9").text
-        start_ts_1 = project.find("./gyro/sts_group")[0].text
-        start_ts_2 = project.find("./gyro/sts_group")[1].text
-        start_ts_3 = project.find("./gyro/sts_group")[2].text
-        start_ts_4 = project.find("./gyro/sts_group")[3].text
-        start_ts_5 = project.find("./gyro/sts_group")[4].text
-        start_ts_6 = project.find("./gyro/sts_group")[5].text
-        audio_device = project.find("./audio/@audio_device").text
-        spatial_audio = project.find("./audio/@spatial_audio")[5].text
-        audio_file = project.find("./audio/@audio_file")[5].text
-        audio_storage_loc = project.find("./audio/@storage_loc")[5].text
+        recording_parameters = {}
+        try:
+            project = et.fromstring(recording_project_data)
+            gravity_x = str(round(float(project.find("./gyro/calibration/gravity_x").text), 6))
+            gravity_y = str(round(float(project.find("./gyro/calibration/gravity_y").text), 6))
+            gravity_z = str(round(float(project.find("./gyro/calibration/gravity_z").text), 6))
+            offset_pano = project.find("./origin_offset/pano_4_3").text
+            offset_stereo_left = project.find("./origin_offset/pano_4_3").text
+            offset_stereo_right = project.find("./origin_offset/pano_16_9").text
+            start_ts_1 = project.find("./gyro/sts_group")[0].text
+            start_ts_2 = project.find("./gyro/sts_group")[1].text
+            start_ts_3 = project.find("./gyro/sts_group")[2].text
+            start_ts_4 = project.find("./gyro/sts_group")[3].text
+            start_ts_5 = project.find("./gyro/sts_group")[4].text
+            start_ts_6 = project.find("./gyro/sts_group")[5].text
+            audio_device = project.find("./audio").attrib['audio_device']
+            spatial_audio = project.find("./audio").attrib['spatial_audio']
+            audio_file = project.find("./audio").attrib['file']
+            audio_storage_loc = project.find("./audio").attrib['storage_loc']
 
-        # update template parameters
-        recording_parameters = copy.deepcopy(ProStitcherController.default_parameters)
-        recording_parameters["source_dir"] = self.settings["source_dir"]
-        recording_parameters["target_dir"] = self.settings["target_dir"]
-        recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
-        recording_parameters["output_destination"] = output_destination
-        recording_parameters["recording_name"] = recording_name
-        recording_parameters["audio_device"] = audio_device
-        recording_parameters["spatial_audio"] = spatial_audio
-        recording_parameters["audio_file"] = audio_file
-        recording_parameters["audio_storage_loc"] = audio_storage_loc
-        if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
-            self.settings["trim_start"] = 0
-        else:
-            recording_parameters["trim_start"] = self.settings["trim_start"]
-        if self.settings["trim_end"] < 0:
-            recording_parameters["trim_end"] = duration + self.settings["trim_end"]
-            if recording_parameters["trim_end"] < 0:
+            # update template parameters
+            recording_parameters = copy.deepcopy(ProStitcherController.default_parameters)
+            recording_parameters["source_dir"] = self.settings["source_dir"]
+            recording_parameters["target_dir"] = self.settings["target_dir"]
+            recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
+            recording_parameters["output_destination"] = output_destination
+            recording_parameters["recording_name"] = recording_name
+            recording_parameters["audio_device"] = audio_device
+            recording_parameters["spatial_audio"] = spatial_audio
+            recording_parameters["audio_file"] = audio_file
+            recording_parameters["audio_storage_loc"] = audio_storage_loc
+            if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
+                self.settings["trim_start"] = 0
+            else:
+                recording_parameters["trim_start"] = self.settings["trim_start"]
+            if self.settings["trim_end"] < 0:
+                recording_parameters["trim_end"] = duration + self.settings["trim_end"]
+                if recording_parameters["trim_end"] < 0:
+                    recording_parameters["trim_end"] = duration
+            elif 0 < self.settings["trim_end"] < duration:
+                recording_parameters["trim_end"] = self.settings["trim_end"]
+            else:
                 recording_parameters["trim_end"] = duration
-        elif 0 < self.settings["trim_end"] < duration:
-            recording_parameters["trim_end"] = self.settings["trim_end"]
-        else:
-            recording_parameters["trim_end"] = duration
-        recording_parameters["gravity_x"] = gravity_x
-        recording_parameters["gravity_y"] = gravity_y
-        recording_parameters["gravity_z"] = gravity_z
-        recording_parameters["offset_pano"] = offset_pano
-        recording_parameters["offset_stereo_left"] = offset_stereo_left
-        recording_parameters["offset_stereo_right"] = offset_stereo_right
-        recording_parameters["start_ts_1"] = start_ts_1
-        recording_parameters["start_ts_2"] = start_ts_2
-        recording_parameters["start_ts_3"] = start_ts_3
-        recording_parameters["start_ts_4"] = start_ts_4
-        recording_parameters["start_ts_5"] = start_ts_5
-        recording_parameters["start_ts_6"] = start_ts_6
+            recording_parameters["gravity_x"] = gravity_x
+            recording_parameters["gravity_y"] = gravity_y
+            recording_parameters["gravity_z"] = gravity_z
+            recording_parameters["offset_pano"] = offset_pano
+            recording_parameters["offset_stereo_left"] = offset_stereo_left
+            recording_parameters["offset_stereo_right"] = offset_stereo_right
+            recording_parameters["start_ts_1"] = start_ts_1
+            recording_parameters["start_ts_2"] = start_ts_2
+            recording_parameters["start_ts_3"] = start_ts_3
+            recording_parameters["start_ts_4"] = start_ts_4
+            recording_parameters["start_ts_5"] = start_ts_5
+            recording_parameters["start_ts_6"] = start_ts_6
+        except Exception as e:
+            raise Exception("Error populating recording parameters from project file: " + str(e))
 
         try:
             qx, qy, qz, qw = Helpers.euler_degrees_to_quaternion(self.settings["roll_x"],
