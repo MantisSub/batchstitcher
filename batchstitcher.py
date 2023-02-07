@@ -111,6 +111,8 @@ class BatchStitcher():
                 self.settings["target_dir"] = self.settings["source_dir"]
             else:
                 self.settings["target_dir"] = ""
+        if self.settings.get("audio_type") and self.settings.get("audio_type") != "none":
+            self.settings["audio_type"] = "default"
 
         self._init_gui()
 
@@ -784,16 +786,17 @@ class BatchStitcher():
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is recording frame rate", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
+        # Setting the audio type wrong leads to error -11 during stitching.
         row_s += 1
         k = "audio_type"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Audio type", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
-                                                values=("pano", "normal", "none"))
+                                                values=("default", "none"))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Default is pano (= Spatial)", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Set to none for no audio.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         # Not needed. We can copy this setting from the pro.prj file
         # row_s += 1

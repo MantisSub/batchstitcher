@@ -272,7 +272,7 @@ class ProStitcherController:
                                     explanation = "Codec/Profile/Bitrate combination not supported by hardware."
                                     resolution = "Please try again with different settings for Codec/Profile/Bitrate."
                             elif returncode == 4294967295 or returncode == -11:
-                                explanation = "Wrong output file format."
+                                explanation = "Wrong output file format or audio type."
                                 resolution = "Please change the output file format and try again."
                             if explanation:
                                 self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).\n"
@@ -347,10 +347,6 @@ class ProStitcherController:
             recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
             recording_parameters["output_destination"] = output_destination
             recording_parameters["recording_name"] = recording_name
-            recording_parameters["audio_device"] = audio_device
-            recording_parameters["spatial_audio"] = spatial_audio
-            recording_parameters["audio_file"] = audio_file
-            recording_parameters["audio_storage_loc"] = audio_storage_loc
             if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
                 self.settings["trim_start"] = 0
             else:
@@ -436,13 +432,29 @@ class ProStitcherController:
         recording_parameters["output_bitrate"] = str(self.settings["bitrate"]) or "503316480"
         recording_parameters["output_codec"] = self.settings["output_codec"] or "h264"
         recording_parameters["output_format"] = self.settings["output_format"] or "mp4"
-        recording_parameters["output_audio_type"] = self.settings["audio_type"] or "pano"
-        recording_parameters["output_audio_device"] = self.settings["audio_device"] or "insta360"
+
+        # audio
+        if self.settings["audio_type"] == "none":
+            # no audio
+            recording_parameters["output_audio_type"] = "none"
+        else:
+            # default, copy from project settings
+            if spatial_audio == "true":
+                recording_parameters["output_audio_type"] = "pano"
+            else:
+                recording_parameters["output_audio_type"] = "normal"
+        recording_parameters["audio_device"] = audio_device
+        recording_parameters["audio_file"] = audio_file
+        recording_parameters["audio_storage_loc"] = audio_storage_loc
+
+        # fps & interpolate
         recording_parameters["output_fps"] = str(self.settings["output_fps"]) or "29.97"
         if Helpers.parse_float(self.settings["output_fps"]) > Helpers.parse_float(input_fps):
             recording_parameters["output_interpolate"] = "1"
         else:
             recording_parameters["output_interpolate"] = "0"
+
+        # color
         recording_parameters["color_brightness"] = self.settings["brightness"] or "0"
         recording_parameters["color_contrast"] = self.settings["contrast"] or "0"
         recording_parameters["color_highlight"] = self.settings["highlight"] or "0"
