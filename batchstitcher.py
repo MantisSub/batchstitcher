@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2023, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -40,6 +40,8 @@ class BatchStitcher():
         self.button_cancel = None
         self.button_start = None
         self.text_area = None
+        self.line_length = 0
+        self.max_line_length = 100
 
         self.themes_path = os.path.abspath('awthemes-10.4.0')
         self.theme_names = ['awdark', 'awlight']
@@ -48,7 +50,7 @@ class BatchStitcher():
         self.button_width = 20
         self.scroll_width = 780
         self.scroll_height = 400
-        self.intvar_keys = ["original_offset", "decode_use_hardware", "decode_use_hardware_count", "encode_use_hardware", "zenith_optimisation", "flowstate_stabilisation", "smooth_stitch", "rename_after_stitching"]
+        self.intvar_keys = ["original_offset", "decode_use_hardware", "decode_hardware_count", "encode_use_hardware", "zenith_optimisation", "flowstate_stabilisation", "smooth_stitch", "rename_after_stitching"]
 
         self._stitcher = None
         self._stitching_thread = None
@@ -143,7 +145,7 @@ class BatchStitcher():
         self.root.rowconfigure(0, weight=1)
         if self.iconbitmap and os.path.isfile(self.iconbitmap):
             self.root.iconbitmap(self.iconbitmap)
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
 
         menubar = tk.Menu(self.root)
         filemenu = tk.Menu(menubar, tearoff=False)
@@ -326,7 +328,7 @@ class BatchStitcher():
         title = 'About Batch Stitcher'
         message = (
             'Batch Stitcher for Insta360 Pro 2 by Axel Busch\n'
-            'Version 0.0.5\n'
+            'Version 0.0.6\n'
             '\n'
             'Provided by Mantis Sub underwater housing for Pro 2\n'
             'Visit https://www.mantis-sub.com/'
@@ -435,16 +437,20 @@ class BatchStitcher():
 
     def log(self, text):
         # Only call from main gui thread
-        try:
-            if self.text_area:
-                self.text_area.configure(state=tk.NORMAL)
-                if text != ".":
-                    self.text_area.insert(tk.END, "\n")
-                self.text_area.insert(tk.END, text)
-                self.text_area.configure(state=tk.DISABLED)
-        except Exception as e:
-            print("Error in log(): ", str(e))
-            print(text)
+        if text:
+            try:
+                if self.text_area:
+                    self.text_area.configure(state=tk.NORMAL)
+                    if text != "." or self.line_length > self.max_line_length:
+                        self.text_area.insert(tk.END, "\n")
+                        self.line_length = 0
+                    self.text_area.insert(tk.END, text)
+                    self.line_length += len(text)
+                    self.text_area.configure(state=tk.DISABLED)
+                    self.text_area.see(tk.END)  # Scroll to end
+            except Exception as e:
+                print("Error in log(): ", str(e))
+                print(text)
 
     def log_callback(self, level, text):
         try:
@@ -489,7 +495,7 @@ class BatchStitcher():
     def _populate_scroll_frame(self):
 
         row_s = 0
-        ttk.Label(self.scroll_frame, text="Setup", anchor='e').grid(row=row_s, column=0,padx=2, pady=8,sticky="e")
+        ttk.Label(self.scroll_frame, text="Setup", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0,padx=2, pady=12,sticky="e")
 
         settings_with_buttons = [("source_dir", 'Source folder:',self._on_select_source_dir),
                                  ("target_dir", 'Output folder:', self._on_select_target_dir),
@@ -518,7 +524,7 @@ class BatchStitcher():
 
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Input", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Input", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
 
         row_s += 1
         k = "source_filter"
@@ -545,7 +551,7 @@ class BatchStitcher():
         ttk.Label(self.scroll_frame, text="Default is on", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        k = "decode_use_hardware_count"
+        k = "decode_hardware_count"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Hardware decoding count:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
@@ -557,7 +563,7 @@ class BatchStitcher():
 
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Stitch", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Stitch", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
 
         row_s += 1
         k = "blend_mode"
@@ -607,7 +613,7 @@ class BatchStitcher():
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Default is on, except for GSV", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Default is on. Turn off for GSV", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
         row_s += 1
         k = "smooth_stitch"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Smooth stitch", anchor='e', width=25)
@@ -643,7 +649,7 @@ class BatchStitcher():
         self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k],
                                              width=self.editor_width)
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Seconds", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Seconds to trim from beginning", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         k = "trim_end"
@@ -652,11 +658,13 @@ class BatchStitcher():
         self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k],
                                              width=self.editor_width)
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Seconds", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-
+        ttk.Label(self.scroll_frame, text=">0: Stop after x seconds from beginning", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        row_s += 1
+        ttk.Label(self.scroll_frame, text="<0: Stop before x seconds from end", anchor='w').grid(
+            row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Orientation", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Orientation", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
 
         row_s += 1
         k = "roll_x"
@@ -686,7 +694,7 @@ class BatchStitcher():
         ttk.Label(self.scroll_frame, text="-180 to 180 Degrees, default 0", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Color", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Color", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
         color_settings = ["brightness", "contrast", "highlight", "shadow", "saturation", "temperature", "tint", "sharpness"]
         for k in color_settings:
             row_s += 1
@@ -699,7 +707,7 @@ class BatchStitcher():
 
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Output", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Output", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
 
         row_s += 1
         k = "output_format"
@@ -781,10 +789,10 @@ class BatchStitcher():
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
-                                                values=( "29.97", "30", "60", "59.94", "25", "24", "23.98", "5", "1",))
+                                                values=("default", "29.97", "30", "60", "59.94", "25", "24", "23.98", "5", "1",))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Default is recording frame rate", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="'Default' uses recording frame rate", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         # Setting the audio type wrong leads to error -11 during stitching.
         row_s += 1
@@ -796,22 +804,13 @@ class BatchStitcher():
                                                 values=("default", "none"))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Set to none for no audio.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-
-        # Not needed. We can copy this setting from the pro.prj file
-        # row_s += 1
-        # k = "audio_device"
-        # self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Audio device", anchor='e', width=25)
-        # self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
-        # self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
-        #                                         textvariable=self.settings_stringvars[k],
-        #                                         values=("insta360","H3-VR"))
-        # self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
-        # self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        # ttk.Label(self.scroll_frame, text="Default is insta360", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="'Default' uses audio type of the recording.", anchor='w').grid(row=row_s, column=2, padx=2,
+                                                                                        pady=2, sticky="w")
+        row_s += 1
+        ttk.Label(self.scroll_frame, text="Set to 'none' for no audio.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        ttk.Label(self.scroll_frame, text="Post processing", anchor='e').grid(row=row_s, column=0, padx=2, pady=8, sticky="e")
+        ttk.Label(self.scroll_frame, text="Post processing", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
 
         row_s += 1
         k = "rename_after_stitching"
@@ -832,11 +831,11 @@ class BatchStitcher():
 
     def show(self):
         row = 0
-        label1 = ttk.Label(self.root, text='Stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings.', font='bold')
+        label1 = ttk.Label(self.root, text='Stitch multiple Insta360 Pro 2 video recordings from a common source folder with the same settings.', font=('Arial', 16))
         label1.grid(row=row, column=0, columnspan=3, padx=50, pady=(20,5), sticky="w")
 
         row += 1
-        label1 = ttk.Label(self.root, text='Provided by Mantis Sub underwater housing for Insta360 Pro/Pro 2. See File -> About for details.')
+        label1 = ttk.Label(self.root, text='Provided by Mantis Sub underwater housing for Insta360 Pro/Pro 2.')
         label1.grid(row=row, column=0, columnspan=3, padx=50, pady=(5,15), sticky="w")
 
         row += 1

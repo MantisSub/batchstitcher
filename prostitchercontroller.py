@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -43,8 +43,8 @@ class ProStitcherController:
         "ffprobe_path": "ffprobe.exe",
         "stitcher_path": "C:/Program Files (x86)/Insta360Stitcher/tools/prostitcher/ProStitcher.exe",
         "encode_use_hardware": 0,
+        "decode_hardware_count": 6,
         "decode_use_hardware": 1,
-        "decode_use_hardware_count": 6,
         "blend_mode": "pano",
         "output_codec": "h264",
         "output_format": "mp4",
@@ -54,7 +54,7 @@ class ProStitcherController:
         "rename_after_stitching": True,
         "rename_prefix": "_",
         "trim_start": 10,
-        "trim_end": -5,
+        "trim_end": -10,
         "blender_type": "auto",
         "zenith_optimisation": 0,
         "flowstate_stabilisation": 1,
@@ -73,7 +73,7 @@ class ProStitcherController:
         "sampling_level": "medium",
         "encode_preset": "veryfast",
         "encode_profile": "main",
-        "output_fps": "29.97",
+        "output_fps": "default",
         "roll_x": 0.0,
         "tilt_y": 0.0,
         "pan_z": 0.0,
@@ -81,11 +81,8 @@ class ProStitcherController:
     }
 
     default_parameters = {
-        "source_dir": "",
-        "target_dir": "",
-        "project_dir": "",
-        "trim_start": 10,
-        "trim_end": -5,
+        "trim_start": 0,
+        "trim_end": 0,
         "blender_type": "auto",  
         "blend_capture_time": "10",
         "blend_use_optical_flow": "1",
@@ -99,8 +96,8 @@ class ProStitcherController:
         "blend_vr180_lens_selection": "<lensSelection/>",  
         "blend_vr180_yaw": '',  
         "encode_use_hardware": "0",
+        "decode_hardware_count": "6",
         "decode_use_hardware": "1",
-        "decode_use_hardware_count": "6",  
         "gyro_enable": 1,
         "gyro_flowstate_enable": "true",
         "color_brightness": "0",
@@ -181,7 +178,7 @@ class ProStitcherController:
       </blend>
       <preference auto="true">
         <encode useHardware="$ENCODE_USE_HARDWARE" threads="4" preset="$ENCODE_PRESET" profile="$ENCODE_PROFILE"/>
-        <decode useHardware="$DECODE_USE_HARDWARE" count="6" threads="4"/>
+        <decode useHardware="$DECODE_USE_HARDWARE" count="$DECODE_HARDWARE_COUNT" threads="4"/>
         <blender type="$BLENDER_TYPE" hdrPreferSaturation="false"/>
       </preference>
       <gyro version="4" storage_type="camm" type="pro_flowstate" enableFlowstate="$GYRO_FLOWSTATE_ENABLE" sweepTime="21478.775024" delayTime="83000" enable="$GYRO_ENABLE" filter="akf">
@@ -254,7 +251,7 @@ class ProStitcherController:
                             self._log_info("Stitching terminated. ")
                             break
                         else:
-                            sleep(0.5)
+                            sleep(1)
                             self._log_info(".")
                     else:
                         if returncode != 0:
@@ -275,17 +272,9 @@ class ProStitcherController:
                                 explanation = "Wrong output file format or audio type."
                                 resolution = "Please change the output file format and try again."
                             if explanation:
-                                self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).\n"
-                                               f"    ProStitcher: {prostitcher}\n"
-                                               f"    Template: {templatefile}\n"
-                                               f"    Logfile: {logfile}\n"
-                                               f"    Settings: {parametersfile}\n")
+                                self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).")
                             else:
-                                self._log_info(f"WARNING. ProStitcher returned code {returncode}.\n"
-                                               f"    ProStitcher: {prostitcher}\n"
-                                               f"    Template: {templatefile}\n"
-                                               f"    Logfile: {logfile}\n"
-                                               f"    Settings: {parametersfile}\n")
+                                self._log_info(f"WARNING. ProStitcher returned code {returncode}.")
                             if resolution:
                                 self._log_info(f"{resolution}\n")
 
@@ -319,8 +308,7 @@ class ProStitcherController:
         return duration, fps
 
 
-    def update_template(self, recording_name, duration, input_fps, recording_project_data, output_destination):
-        recording_parameters = {}
+    def update_template(self, recording_settings, recording_name, duration, input_fps, recording_project_data, output_destination):
         try:
             project = et.fromstring(recording_project_data)
             gravity_x = str(round(float(project.find("./gyro/calibration/gravity_x").text), 6))
@@ -341,180 +329,200 @@ class ProStitcherController:
             audio_storage_loc = project.find("./audio").attrib['storage_loc']
 
             # update template parameters
-            recording_parameters = copy.deepcopy(ProStitcherController.default_parameters)
-            recording_parameters["source_dir"] = self.settings["source_dir"]
-            recording_parameters["target_dir"] = self.settings["target_dir"]
-            recording_parameters["recording_dir"] = os.path.join(self.settings["source_dir"], recording_name)
-            recording_parameters["output_destination"] = output_destination
-            recording_parameters["recording_name"] = recording_name
-            if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
-                self.settings["trim_start"] = 0
+            recording_settings["recording_dir"] = os.path.join(recording_settings["source_dir"], recording_name)
+            recording_settings["output_destination"] = output_destination
+            recording_settings["recording_name"] = recording_name
+            recording_settings["trim_start"] = Helpers.parse_int(recording_settings["trim_start"])
+            if recording_settings["trim_start"] < 0 or recording_settings["trim_start"] > duration:
+                recording_settings["trim_start"] = 0
             else:
-                recording_parameters["trim_start"] = self.settings["trim_start"]
-            if self.settings["trim_end"] < 0:
-                recording_parameters["trim_end"] = duration + self.settings["trim_end"]
-                if recording_parameters["trim_end"] < 0:
-                    recording_parameters["trim_end"] = duration
-            elif 0 < self.settings["trim_end"] < duration:
-                recording_parameters["trim_end"] = self.settings["trim_end"]
+                recording_settings["trim_start"] = recording_settings["trim_start"]
+            recording_settings["trim_end"] = Helpers.parse_int(recording_settings["trim_end"])
+            if recording_settings["trim_end"] < 0:
+                recording_settings["trim_end"] = duration + recording_settings["trim_end"]
+                if recording_settings["trim_end"] < 0:
+                    recording_settings["trim_end"] = duration
+            elif 0 < recording_settings["trim_end"] < duration:
+                recording_settings["trim_end"] = recording_settings["trim_end"]
             else:
-                recording_parameters["trim_end"] = duration
-            recording_parameters["gravity_x"] = gravity_x
-            recording_parameters["gravity_y"] = gravity_y
-            recording_parameters["gravity_z"] = gravity_z
-            recording_parameters["offset_pano"] = offset_pano
-            recording_parameters["offset_stereo_left"] = offset_stereo_left
-            recording_parameters["offset_stereo_right"] = offset_stereo_right
-            recording_parameters["start_ts_1"] = start_ts_1
-            recording_parameters["start_ts_2"] = start_ts_2
-            recording_parameters["start_ts_3"] = start_ts_3
-            recording_parameters["start_ts_4"] = start_ts_4
-            recording_parameters["start_ts_5"] = start_ts_5
-            recording_parameters["start_ts_6"] = start_ts_6
+                recording_settings["trim_end"] = duration
+            recording_settings["gravity_x"] = gravity_x
+            recording_settings["gravity_y"] = gravity_y
+            recording_settings["gravity_z"] = gravity_z
+            recording_settings["offset_pano"] = offset_pano
+            recording_settings["offset_stereo_left"] = offset_stereo_left
+            recording_settings["offset_stereo_right"] = offset_stereo_right
+            recording_settings["start_ts_1"] = start_ts_1
+            recording_settings["start_ts_2"] = start_ts_2
+            recording_settings["start_ts_3"] = start_ts_3
+            recording_settings["start_ts_4"] = start_ts_4
+            recording_settings["start_ts_5"] = start_ts_5
+            recording_settings["start_ts_6"] = start_ts_6
         except Exception as e:
             raise Exception("Error populating recording parameters from project file: " + str(e))
 
         try:
-            qx, qy, qz, qw = Helpers.euler_degrees_to_quaternion(self.settings["roll_x"],
-                                                                 self.settings["tilt_y"],
-                                                                 self.settings["pan_z"],
+            qx, qy, qz, qw = Helpers.euler_degrees_to_quaternion(recording_settings["roll_x"],
+                                                                 recording_settings["tilt_y"],
+                                                                 recording_settings["pan_z"],
                                                                  y_up=True)
-            recording_parameters["diff_quat_x"] = qx
-            recording_parameters["diff_quat_y"] = qy
-            recording_parameters["diff_quat_z"] = qz
-            recording_parameters["diff_quat_w"] = qw
+            recording_settings["diff_quat_x"] = qx
+            recording_settings["diff_quat_y"] = qy
+            recording_settings["diff_quat_z"] = qz
+            recording_settings["diff_quat_w"] = qw
         except:
-            recording_parameters["diff_quat_x"] = 0
-            recording_parameters["diff_quat_y"] = 0
-            recording_parameters["diff_quat_z"] = 0
-            recording_parameters["diff_quat_w"] = 1
+            recording_settings["diff_quat_x"] = 0
+            recording_settings["diff_quat_y"] = 0
+            recording_settings["diff_quat_z"] = 0
+            recording_settings["diff_quat_w"] = 1
 
         # "blend_mode": "pano",  # Mono: pano, Stereo: stereo_top_left, stereo_top_right, vr180, vr180_4lens
-        recording_parameters["blend_mode"] = self.settings["blend_mode"]
-        if self.settings["blend_mode"] == "vr180":
-            recording_parameters["blend_lens_selection"] = ProStitcherController.vr180_lens_selection
-            recording_parameters["blend_vr180_yaw"] = ""
-            recording_parameters["blend_angle_optical"] = "16"
-            recording_parameters["output_width"] = str(int(self.settings["width"]))
-            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
-        elif self.settings["blend_mode"] == "vr180_4lens":
-            recording_parameters["blend_lens_selection"] = "<lensSelection/>"
-            recording_parameters["blend_vr180_yaw"] = 'vr180Yaw="180"'
-            recording_parameters["blend_angle_optical"] = "16"
-            recording_parameters["output_width"] = str(int(self.settings["width"]))
-            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
-        elif self.settings["blend_mode"] in ["stereo_top_left", "stereo_top_right"]:
-            recording_parameters["blend_lens_selection"] = "<lensSelection/>"
-            recording_parameters["blend_vr180_yaw"] = ""
-            recording_parameters["blend_angle_optical"] = "16"
-            recording_parameters["output_width"] = str(int(self.settings["width"]))
-            recording_parameters["output_height"] = str(int(self.settings["width"]))
+        if recording_settings["blend_mode"] == "vr180":
+            recording_settings["blend_lens_selection"] = ProStitcherController.vr180_lens_selection
+            recording_settings["blend_vr180_yaw"] = ""
+            recording_settings["blend_angle_optical"] = "16"
+            recording_settings["output_width"] = str(int(recording_settings["width"]))
+            recording_settings["output_height"] = str(int(recording_settings["width"]/2))
+        elif recording_settings["blend_mode"] == "vr180_4lens":
+            recording_settings["blend_lens_selection"] = "<lensSelection/>"
+            recording_settings["blend_vr180_yaw"] = 'vr180Yaw="180"'
+            recording_settings["blend_angle_optical"] = "16"
+            recording_settings["output_width"] = str(int(recording_settings["width"]))
+            recording_settings["output_height"] = str(int(recording_settings["width"]/2))
+        elif recording_settings["blend_mode"] in ["stereo_top_left", "stereo_top_right"]:
+            recording_settings["blend_lens_selection"] = "<lensSelection/>"
+            recording_settings["blend_vr180_yaw"] = ""
+            recording_settings["blend_angle_optical"] = "16"
+            recording_settings["output_width"] = str(int(recording_settings["width"]))
+            recording_settings["output_height"] = str(int(recording_settings["width"]))
         else:
-            recording_parameters["blend_lens_selection"] = "<lensSelection/>"
-            recording_parameters["blend_vr180_yaw"] = ""
-            recording_parameters["blend_angle_optical"] = "20"
-            recording_parameters["output_width"] = str(int(self.settings["width"]))
-            recording_parameters["output_height"] = str(int(self.settings["width"]/2))
-        recording_parameters["blend_capture_time"] = Helpers.parse_int(self.settings["reference_time"])
-        if not recording_parameters["blend_capture_time"] or recording_parameters["blend_capture_time"] > duration or recording_parameters["blend_capture_time"] < 0:
-            recording_parameters["blend_capture_time"] = Helpers.parse_int(duration/2)
-        recording_parameters["gyro_enable"] = "1" if self.settings["flowstate_stabilisation"] else "0"
-        recording_parameters["blend_smooth_stitch"] = "true" if self.settings["smooth_stitch"] else "false"
-        recording_parameters["blend_original_offset"] = "true" if self.settings["original_offset"] else "false"
-        recording_parameters["blend_top_fixer"] = "1" if self.settings["zenith_optimisation"] else "0"
-        recording_parameters["blender_type"] = self.settings["blender_type"] or "auto"
-        recording_parameters["encode_preset"] = self.settings["encode_preset"] or "superfast"
-        recording_parameters["encode_profile"] = self.settings["encode_profile"] or "baseline"
-        recording_parameters["sampling_level"] = self.settings["sampling_level"] or "fast"
-        recording_parameters["encode_use_hardware"] = str(self.settings["encode_use_hardware"]) or "0"
-        recording_parameters["decode_use_hardware"] = str(self.settings["decode_use_hardware"]) or "1"
-        recording_parameters["decode_use_hardware_count"] = self.settings["decode_use_hardware_count"] or "6"
-        recording_parameters["output_bitrate"] = str(self.settings["bitrate"]) or "503316480"
-        recording_parameters["output_codec"] = self.settings["output_codec"] or "h264"
-        recording_parameters["output_format"] = self.settings["output_format"] or "mp4"
+            recording_settings["blend_lens_selection"] = "<lensSelection/>"
+            recording_settings["blend_vr180_yaw"] = ""
+            recording_settings["blend_angle_optical"] = "20"
+            recording_settings["output_width"] = str(int(recording_settings["width"]))
+            recording_settings["output_height"] = str(int(recording_settings["width"]/2))
+
+        recording_settings["blend_capture_time"] = Helpers.parse_int(recording_settings["reference_time"])
+        if not recording_settings["blend_capture_time"] or recording_settings["blend_capture_time"] > duration or recording_settings["blend_capture_time"] < 0:
+            recording_settings["blend_capture_time"] = Helpers.parse_int(duration/2)
+        recording_settings["gyro_enable"] = "1" if recording_settings["flowstate_stabilisation"] else "0"
+        recording_settings["blend_smooth_stitch"] = "true" if recording_settings["smooth_stitch"] else "false"
+        recording_settings["blend_original_offset"] = "true" if recording_settings["original_offset"] else "false"
+        recording_settings["blend_top_fixer"] = "1" if recording_settings["zenith_optimisation"] else "0"
+        recording_settings["blender_type"] = recording_settings["blender_type"] or "auto"
+        recording_settings["encode_preset"] = recording_settings["encode_preset"] or "superfast"
+        recording_settings["encode_profile"] = recording_settings["encode_profile"] or "baseline"
+        recording_settings["sampling_level"] = recording_settings["sampling_level"] or "fast"
+        recording_settings["encode_use_hardware"] = str(recording_settings["encode_use_hardware"]) or "0"
+        recording_settings["decode_hardware_count"] = recording_settings["decode_hardware_count"] or "6"
+        recording_settings["decode_use_hardware"] = str(recording_settings["decode_use_hardware"]) or "1"
+        recording_settings["output_bitrate"] = str(recording_settings["bitrate"]) or "503316480"
+        recording_settings["output_codec"] = recording_settings["output_codec"] or "h264"
+        recording_settings["output_format"] = recording_settings["output_format"] or "mp4"
 
         # audio
-        if self.settings["audio_type"] == "none":
+        if recording_settings["audio_type"] == "none":
             # no audio
-            recording_parameters["output_audio_type"] = "none"
+            recording_settings["output_audio_type"] = "none"
         else:
             # default, copy from project settings
             if spatial_audio == "true":
-                recording_parameters["output_audio_type"] = "pano"
+                recording_settings["output_audio_type"] = "pano"
             else:
-                recording_parameters["output_audio_type"] = "normal"
-        recording_parameters["audio_device"] = audio_device
-        recording_parameters["audio_file"] = audio_file
-        recording_parameters["audio_storage_loc"] = audio_storage_loc
+                recording_settings["output_audio_type"] = "normal"
+        recording_settings["output_audio_device"] = audio_device
+        recording_settings["audio_file"] = audio_file
+        recording_settings["audio_storage_loc"] = audio_storage_loc
 
-        # fps & interpolate
-        recording_parameters["output_fps"] = str(self.settings["output_fps"]) or "29.97"
-        if Helpers.parse_float(self.settings["output_fps"]) > Helpers.parse_float(input_fps):
-            recording_parameters["output_interpolate"] = "1"
+        # fps & interpolation
+        recording_settings["output_fps"] = str(recording_settings["output_fps"]) or "29.97"
+        if recording_settings["output_fps"] == "default":
+            recording_settings["output_fps"] = Helpers.parse_float(input_fps)
+            recording_settings["output_interpolation"] = "0"
         else:
-            recording_parameters["output_interpolate"] = "0"
+            input_fps = Helpers.parse_float(input_fps)
+            recording_settings["output_fps"] = Helpers.parse_float(recording_settings["output_fps"])
+            recording_settings["output_interpolation"] = "0"
+
+            # determine interpolation settings. Turning interpolation on doubles the specified frame rate.
+            if recording_settings["output_fps"] == 2 * input_fps:
+                recording_settings["output_fps"] = input_fps
+                recording_settings["output_interpolation"] = "1"
+            else:
+                recording_settings["output_interpolation"] = "0"
 
         # color
-        recording_parameters["color_brightness"] = self.settings["brightness"] or "0"
-        recording_parameters["color_contrast"] = self.settings["contrast"] or "0"
-        recording_parameters["color_highlight"] = self.settings["highlight"] or "0"
-        recording_parameters["color_shadow"] = self.settings["shadow"] or "0"
-        recording_parameters["color_saturation"] = self.settings["saturation"] or "0"
-        recording_parameters["color_temperature"] = self.settings["temperature"] or "0"
-        recording_parameters["color_tint"] = self.settings["tint"] or "0"
-        recording_parameters["color_sharpness"] = self.settings["sharpness"] or "0"
+        recording_settings["color_brightness"] = recording_settings["brightness"] or "0"
+        recording_settings["color_contrast"] = recording_settings["contrast"] or "0"
+        recording_settings["color_highlight"] = recording_settings["highlight"] or "0"
+        recording_settings["color_shadow"] = recording_settings["shadow"] or "0"
+        recording_settings["color_saturation"] = recording_settings["saturation"] or "0"
+        recording_settings["color_temperature"] = recording_settings["temperature"] or "0"
+        recording_settings["color_tint"] = recording_settings["tint"] or "0"
+        recording_settings["color_sharpness"] = recording_settings["sharpness"] or "0"
 
         # fix known settings constraints
-        if sys.platform == "darwin" and recording_parameters["blender_type"] == "cuda":
+        if sys.platform == "darwin" and recording_settings["blender_type"] == "cuda":
             # cuda not supported on mac
-            recording_parameters["blender_type"] = "opencl"
-        if self.settings["output_codec"] == "prores":
+            recording_settings["blender_type"] = "opencl"
+        if recording_settings["output_codec"] == "prores":
             # prores only supports encode_profile=3
-            recording_parameters["encode_profile"] = "3"
+            recording_settings["encode_profile"] = "3"
             # prores only supports output_format=mov
-            recording_parameters["output_format"] = "mov"
-        elif self.settings["output_codec"] == "h265" and self.settings["encode_profile"] == "baseline":
+            recording_settings["output_format"] = "mov"
+        elif recording_settings["output_codec"] == "h265" and recording_settings["encode_profile"] == "baseline":
             # h265 encoding crashes with encode_profile=baseline. Set encode_profile=main
-            recording_parameters["encode_profile"] = "main"
+            recording_settings["encode_profile"] = "main"
 
         # replace parameters in template
         recording_template = ProStitcherController.default_template
-        for k, v in recording_parameters.items():
+        for k, v in recording_settings.items():
             recording_template = recording_template.replace("${}".format(k.upper()), str(v))
 
         # remove destination file if exists
         try:
-            if os.path.exists(recording_parameters["output_destination"]):
-                os.remove(recording_parameters["output_destination"])
+            if os.path.exists(recording_settings["output_destination"]):
+                os.remove(recording_settings["output_destination"])
         except:
             pass
 
-        return recording_template, recording_parameters
+        return recording_template
 
     def process_recording(self, recording):
         result = -1
         t = strftime("%H%M%S", localtime())
 
-        preview_filepath = os.path.join(self.settings["source_dir"], recording, "preview.mp4")
-        duration, fps = self._run_ffprobe(self.settings["ffprobe_path"], preview_filepath)
-        if duration >= self.settings["min_recording_duration"]:
+        # make private copy as we'll change some things for each recording
+        recording_settings = copy.deepcopy(self.settings)
+
+        # insert any default settings not present
+        for k,v in self.default_parameters.items():
+            if k not in recording_settings:
+                recording_settings[k] = v
+
+        preview_filepath = os.path.join(recording_settings["source_dir"], recording, "preview.mp4")
+        duration, fps = self._run_ffprobe(recording_settings["ffprobe_path"], preview_filepath)
+        if duration >= recording_settings["min_recording_duration"]:
+
             # create file paths
             tempdir = tempfile.gettempdir()
-            recording_project_file = os.path.join(self.settings["source_dir"], recording, "pro.prj")
-            destination_file = "{}_{}.{}".format(recording, t, self.settings["output_format"])
-            output_destination = os.path.join(self.settings["target_dir"], destination_file)
+            recording_project_file = os.path.join(recording_settings["source_dir"], recording, "pro.prj")
+            destination_file = "{}_{}.{}".format(recording, t, recording_settings["output_format"])
+            output_destination = os.path.join(recording_settings["target_dir"], destination_file)
             project_filepath = os.path.join(tempdir, recording + "_{}_project.xml".format(t))
             template_filepath = os.path.join(tempdir, recording + "_{}_template.xml".format(t))
             recording_logfile = os.path.join(tempdir, recording + "_{}_stitcher.log".format(t))
             parameters_filepath = os.path.join(tempdir, recording + "_{}_parameters.json".format(t))
 
-            if self.settings["trim_start"] < 0 or self.settings["trim_start"] > duration:
-                self.settings["trim_start"] = 0
-            if self.settings["trim_end"] < 0:
-                self.settings["trim_end"] = duration + self.settings["trim_end"]
-                if self.settings["trim_end"] < 0:
-                    self.settings["trim_end"] = duration
-            stitching_duration = self.settings["trim_end"] - self.settings["trim_start"]
+            # update trim settings from relative to absolute.
+            if recording_settings["trim_start"] < 0 or recording_settings["trim_start"] > duration:
+                recording_settings["trim_start"] = 0
+            if recording_settings["trim_end"] < 0:
+                recording_settings["trim_end"] = duration + recording_settings["trim_end"]
+                if recording_settings["trim_end"] < 0:
+                    recording_settings["trim_end"] = duration
+            # calculate total stitching duration
+            stitching_duration = recording_settings["trim_end"] - recording_settings["trim_start"]
 
             # read project file
             if os.path.exists(recording_project_file):
@@ -522,22 +530,27 @@ class ProStitcherController:
                 Helpers.write_file(project_filepath, recording_project_data)
 
                 # create stitching template for this recording
-                recording_template, recording_parameters = self.update_template(recording,
-                                                                                int(duration),
-                                                                                fps,
-                                                                                recording_project_data,
-                                                                                output_destination)
+                recording_template = self.update_template(recording_settings,
+                                                            recording,
+                                                            int(duration),
+                                                            fps,
+                                                            recording_project_data,
+                                                            output_destination)
                 Helpers.write_file(template_filepath, recording_template)
                 try:
-                    Helpers.write_file(parameters_filepath, json.dumps(recording_parameters, indent=4))
+                    Helpers.write_file(parameters_filepath, json.dumps(recording_settings, indent=4))
                 except:
                     pass
 
                 # stitch
-                self._log_info("Stitching {} (duration: {}s) ".format(recording, int(stitching_duration)))
+                self._log_info("\nStitching {} (duration: {}s) ".format(recording, int(stitching_duration)))
+                self._log_info(f"ProStitcher: {recording_settings['stitcher_path']}\n"
+                                f"Template: {os.path.abspath(template_filepath)}\n"
+                                f"Logfile: {os.path.abspath(recording_logfile)}\n"
+                                f"Settings: {os.path.abspath(parameters_filepath)}")
                 if not self._stopping:
                     t1 = time()
-                    result = self._run_prostitcher(self.settings["stitcher_path"],
+                    result = self._run_prostitcher(recording_settings["stitcher_path"],
                                          tempdir,
                                          os.path.abspath(template_filepath),
                                          os.path.abspath(recording_logfile),
@@ -548,10 +561,10 @@ class ProStitcherController:
                         self._log_info("Completed {} in {}s at {} fps.".format(recording, t3,
                                                                              round(float(fps) * int(stitching_duration) / t3, 2)))
 
-                        if self.settings["rename_after_stitching"]:
+                        if recording_settings["rename_after_stitching"]:
                             try:
-                                cur_path = os.path.join(self.settings["source_dir"], recording)
-                                new_path = os.path.join(self.settings["source_dir"], self.settings["rename_prefix"] + recording)
+                                cur_path = os.path.join(recording_settings["source_dir"], recording)
+                                new_path = os.path.join(recording_settings["source_dir"], recording_settings["rename_prefix"] + recording)
                                 os.rename(cur_path, new_path)
                             except:
                                 pass
@@ -595,6 +608,7 @@ class ProStitcherController:
         self.settings["width"] = Helpers.parse_int(self.settings["width"])
         self.settings["threads"] = Helpers.parse_int(self.settings["threads"])
         self.settings["encode_use_hardware"] = Helpers.parse_int(self.settings["encode_use_hardware"])
+        self.settings["decode_hardware_count"] = Helpers.parse_int(self.settings["decode_hardware_count"])
         self.settings["decode_use_hardware"] = Helpers.parse_int(self.settings["decode_use_hardware"])
         self.settings["width"] = Helpers.parse_int(self.settings["width"])
         self.settings["bitrate"] = Helpers.parse_int(self.settings["bitrate"])

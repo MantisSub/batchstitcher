@@ -4,7 +4,7 @@
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2022, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 __email__ = "info@xlvisuals.com"
 
 import sys

@@ -97,7 +97,7 @@ The following two settings are of special importance:
 
 - The progress window should provide enough information if something goes wrong. 
 - Some combinations of Codec / Profile / Bitrate don't work. 
-  - In thise case you will get an error 244 (Codec/Profile not supported)
+  - In this case you will get an error 244 (Codec/Profile not supported)
   - Try with a different codec, encoding profile, or bitrate.
 - The progress window also shows the paths to the stitcher logfile for each stitch that fails.
 - The progress window shows the achieved stitching frame rate (fps) at the end of the stitching process. 
