@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2023, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -50,7 +50,7 @@ class BatchStitcher():
         self.button_width = 20
         self.scroll_width = 780
         self.scroll_height = 400
-        self.intvar_keys = ["original_offset", "decode_use_hardware", "decode_hardware_count", "encode_use_hardware", "zenith_optimisation", "flowstate_stabilisation", "smooth_stitch", "rename_after_stitching"]
+        self.intvar_keys = ["original_offset", "decode_use_hardware", "decode_hardware_count", "encode_use_hardware", "zenith_optimisation", "flowstate_stabilisation", "direction_lock", "smooth_stitch", "rename_after_stitching"]
 
         self._stitcher = None
         self._stitching_thread = None
@@ -86,6 +86,8 @@ class BatchStitcher():
                 self.inifile_path = default_inifile_path
 
         self.settings = Helpers.read_config(self.inifile_path, ProStitcherController.default_settings)
+        if self.settings and platform == "darwin" and self.settings.get("blender_type") == "cuda":
+            self.settings["blender_type"] = "opencl"
 
         # Check for executables
         if not self.settings["ffprobe_path"]:
@@ -145,7 +147,7 @@ class BatchStitcher():
         self.root.rowconfigure(0, weight=1)
         if self.iconbitmap and os.path.isfile(self.iconbitmap):
             self.root.iconbitmap(self.iconbitmap)
-        self.root.resizable(True, True)
+        self.root.resizable(False, False)
 
         menubar = tk.Menu(self.root)
         filemenu = tk.Menu(menubar, tearoff=False)
@@ -328,7 +330,7 @@ class BatchStitcher():
         title = 'About Batch Stitcher'
         message = (
             'Batch Stitcher for Insta360 Pro 2 by Axel Busch\n'
-            'Version 0.0.6\n'
+            'Version ' + __version__ + '\n'
             '\n'
             'Provided by Mantis Sub underwater housing for Pro 2\n'
             'Visit https://www.mantis-sub.com/'
@@ -520,8 +522,7 @@ class BatchStitcher():
                                                 values=("1", "2", "3", "4"))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="> 1 requires a lot of VRAM. ", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-
+        ttk.Label(self.scroll_frame, text="values >1 depend on available VRAM.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         ttk.Label(self.scroll_frame, text="Input", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
@@ -607,6 +608,7 @@ class BatchStitcher():
         self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is off", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
         row_s += 1
         k = "flowstate_stabilisation"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Stabilization", anchor='e', width=25)
@@ -614,6 +616,16 @@ class BatchStitcher():
         self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is on. Turn off for GSV", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
+        row_s += 1
+        k = "direction_lock"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Direction lock", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
+        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Default is off. Ignored by Stitcher v3", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
         row_s += 1
         k = "smooth_stitch"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Smooth stitch", anchor='e', width=25)
@@ -732,12 +744,15 @@ class BatchStitcher():
         ttk.Label(self.scroll_frame, text="h264 or prores for editing, h265 for Quest", anchor='w').grid(row=row_s, column=2, padx=2, pady=2,sticky="w")
 
         row_s += 1
-        k = "encode_use_hardware"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Use hardware encoding:", anchor='e', width=25)
+        k = "width"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Width:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
-        self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
+        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+                                                textvariable=self.settings_stringvars[k],
+                                                values=("7680", "6400", "5760", "5248", "5120", "4096", "3840", "2560", "2048", "1920", "1440", "1024", "720"))
+        self.settings_widgets[k].config(width=self.editor_width-2)
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Not supported for all modes on all platforms", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Height is set automatically", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         k = "encode_profile"
@@ -749,8 +764,8 @@ class BatchStitcher():
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is baseline", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
-        row_s += 1
 
+        row_s += 1
         k = "encode_preset"
         self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Encoding speed", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
@@ -762,15 +777,14 @@ class BatchStitcher():
         ttk.Label(self.scroll_frame, text="Default is superfast", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
-        k = "width"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Width:", anchor='e', width=25)
+        k = "encode_use_hardware"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Use hardware encoding:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
-        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
-                                                textvariable=self.settings_stringvars[k],
-                                                values=("7680", "6400", "5760", "5248", "5120", "4096", "3840", "2560", "2048", "1920", "1440", "1024", "720"))
-        self.settings_widgets[k].config(width=self.editor_width-2)
+        self.settings_widgets[k] = ttk.Checkbutton(self.scroll_frame, variable=self.settings_intvars[k])
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="Height is set automatically", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Not supported for >4K on all platforms.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        row_s += 1
+        ttk.Label(self.scroll_frame, text="Supported for <=4K on most platforms.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         k = "bitrate_mbps"
@@ -792,7 +806,7 @@ class BatchStitcher():
                                                 values=("default", "29.97", "30", "60", "59.94", "25", "24", "23.98", "5", "1",))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="'Default' uses recording frame rate", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="'Default' uses recording frame rate.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         # Setting the audio type wrong leads to error -11 during stitching.
         row_s += 1

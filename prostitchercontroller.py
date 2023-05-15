@@ -5,9 +5,9 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 """
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2022, Xlvisuals Limited"
+__copyright__ = "Copyright 2023, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -58,6 +58,7 @@ class ProStitcherController:
         "blender_type": "auto",
         "zenith_optimisation": 0,
         "flowstate_stabilisation": 1,
+        "direction_lock": 0,
         "original_offset": 1,
         "smooth_stitch": 1,
         "brightness": 0,
@@ -81,10 +82,13 @@ class ProStitcherController:
     }
 
     default_parameters = {
+        "firmware_version": "1.1.8",
         "trim_start": 0,
         "trim_end": 0,
-        "blender_type": "auto",  
+        "blend_algorithm": "2",
+        "blender_type": "auto",
         "blend_capture_time": "10",
+        "source_crop_type": "2",
         "blend_use_optical_flow": "1",
         "blend_new_optical_flow": "1",
         "blend_angle_template": "0.5",
@@ -100,6 +104,9 @@ class ProStitcherController:
         "decode_use_hardware": "1",
         "gyro_enable": 1,
         "gyro_flowstate_enable": "true",
+        "gyro_flowstate_mode": "1",
+        "gyro_sweep_time": "21478.775024",
+        "gyro_delay_time": "83000",
         "color_brightness": "0",
         "color_contrast": "10",
         "color_highlight": "3",
@@ -152,9 +159,9 @@ class ProStitcherController:
         </lensSelection>
     """
 
-    default_template = \
+    stitcher_template = \
         """<stitchParam>
-      <input type="video" lensCount="6" fileCount="1" generation="pro2" fwVersion="1.1.8">
+      <input type="video" lensCount="6" fileCount="1" generation="pro2" fwVersion="$FIRMWARE_VERSION">
         <stitching enable="both"/>
         <videoGroup type="h264" ptsOffset="0" enable="1">
           <trim start="$TRIM_START" end="$TRIM_END"/>
@@ -167,9 +174,9 @@ class ProStitcherController:
         </videoGroup>
         <audio src="$RECORDING_DIR/origin_6_lrv.mp4"/>
       </input>
-      <blend useOpticalFlow="$BLEND_USE_OPTICAL_FLOW" useNewOpticalFlow="$BLEND_NEW_OPTICAL_FLOW" mode="$BLEND_MODE" samplingLevel="$SAMPLING_LEVEL" useTopFixer="$BLEND_TOP_FIXER" opticalBlendAngle="$BLEND_ANGLE_OPTICAL" templateBlendAngle="$BLEND_ANGLE_TEMPLATE" enableColorAdjustment="$BLEND_SMOOTH_STITCH" useOriginalOffset="$BLEND_ORIGINAL_OFFSET" $BLEND_VR180_YAW>
+      <blend blendAlgorithm="$BLEND_ALGORITHM" useOpticalFlow="$BLEND_USE_OPTICAL_FLOW" useNewOpticalFlow="$BLEND_NEW_OPTICAL_FLOW" mode="$BLEND_MODE" samplingLevel="$SAMPLING_LEVEL" useTopFixer="$BLEND_TOP_FIXER" opticalBlendAngle="$BLEND_ANGLE_OPTICAL" templateBlendAngle="$BLEND_ANGLE_TEMPLATE" enableColorAdjustment="$BLEND_SMOOTH_STITCH" useOriginalOffset="$BLEND_ORIGINAL_OFFSET" $BLEND_VR180_YAW>
         <capture time="$BLEND_CAPTURE_TIME" index="0"/>
-        <offset sourceCropType="1">
+        <offset sourceCropType="$SOURCE_CROP_TYPE">
           <pano>$OFFSET_PANO</pano>
           <stereoLeft>$OFFSET_STEREO_LEFT</stereoLeft>
           <stereoRight>$OFFSET_STEREO_RIGHT</stereoRight>
@@ -181,7 +188,7 @@ class ProStitcherController:
         <decode useHardware="$DECODE_USE_HARDWARE" count="$DECODE_HARDWARE_COUNT" threads="4"/>
         <blender type="$BLENDER_TYPE" hdrPreferSaturation="false"/>
       </preference>
-      <gyro version="4" storage_type="camm" type="pro_flowstate" enableFlowstate="$GYRO_FLOWSTATE_ENABLE" sweepTime="21478.775024" delayTime="83000" enable="$GYRO_ENABLE" filter="akf">
+      <gyro version="4" storage_type="camm" type="pro_flowstate" enableFlowstate="$GYRO_FLOWSTATE_ENABLE" flowstate_mode="$GYRO_FLOWSTATE_MODE" sweepTime="$GYRO_SWEEP_TIME" delayTime="$GYRO_DELAY_TIME" enable="$GYRO_ENABLE" filter="akf">
         <sts_group>
           <start_ts>$START_TS_1</start_ts>
           <start_ts>$START_TS_2</start_ts>
@@ -258,18 +265,21 @@ class ProStitcherController:
                             explanation = ''
                             resolution = ''
                             if returncode == -6:
-                                explanation = "Not all origin_x.mp4 files present."
+                                explanation = "Not all origin_x.mp4 files present"
                             elif returncode == 235:
-                                explanation = "Source video not found."
+                                explanation = "Source video not found"
                             elif returncode == 244:
                                 if self.settings["encode_use_hardware"]:
-                                    explanation = "Hardware encoding not supported."
+                                    explanation = "Hardware encoding not supported"
                                     resolution = "Please unset 'Use hardware encoding' and try again."
                                 else:
-                                    explanation = "Codec/Profile/Bitrate combination not supported by hardware."
+                                    explanation = "Codec/Profile/Bitrate combination not supported by hardware"
                                     resolution = "Please try again with different settings for Codec/Profile/Bitrate."
+                            elif returncode == 1012:
+                                explanation = "Codec and file format not compatible"
+                                resolution = "Please try again with different settings for file format."
                             elif returncode == 4294967295 or returncode == -11:
-                                explanation = "Wrong output file format or audio type."
+                                explanation = "Wrong output file format or audio type"
                                 resolution = "Please change the output file format and try again."
                             if explanation:
                                 self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).")
@@ -307,6 +317,42 @@ class ProStitcherController:
             self._log_error("Error running ffprobe: {}".format(str(e)))
         return duration, fps
 
+    @classmethod
+    def get_prostitcher_major_version(cls, prostitcher_path):
+        """
+        Prostitcher Windows v2.5.1: Size = 24M, 25060352
+        Prostitcher Windows v3.0.0: Size = 16M, 16182272
+        Prostitcher Windows v3.1.2: Size = 29M, 30345216
+        Prostitcher Windows v3.1.3: Size = 39M, 40261632
+        Prostitcher Windows v4.0.0: Size = 61M, 63691264
+
+        Prostitcher macOS v2.5.1: Size = 13M, 13295556
+        Prostitcher macOS v3.0.0: Size = 21M, 22406044
+        Prostitcher macOS v4.0.0: Size = 46M, 48142560
+        """
+        major_version = 3  # default
+        try:
+            if prostitcher_path and os.path.exists(prostitcher_path):
+                size = os.path.getsize(prostitcher_path)
+                if sys.platform == "darwin":
+                    #macOS
+                    if size < 20000000:
+                        major_version = 2
+                    elif size < 30000000:
+                        major_version = 3
+                    elif size < 50000000:
+                        major_version = 4
+                else:
+                    # windows
+                    if 22000000 < size < 28000000:
+                        major_version = 2
+                    elif size < 50000000:
+                        major_version = 3
+                    elif size < 70000000:
+                        major_version = 4
+        except:
+            pass
+        return major_version
 
     def update_template(self, recording_settings, recording_name, duration, input_fps, recording_project_data, output_destination):
         try:
@@ -314,6 +360,8 @@ class ProStitcherController:
             gravity_x = str(round(float(project.find("./gyro/calibration/gravity_x").text), 6))
             gravity_y = str(round(float(project.find("./gyro/calibration/gravity_y").text), 6))
             gravity_z = str(round(float(project.find("./gyro/calibration/gravity_z").text), 6))
+            rolling_shutter_time_us = project.find("./gyro").attrib['rolling_shutter_time_us']
+            delay_time_us = project.find("./gyro").attrib['delay_time_us']
             offset_pano = project.find("./origin_offset/pano_4_3").text
             offset_stereo_left = project.find("./origin_offset/pano_4_3").text
             offset_stereo_right = project.find("./origin_offset/pano_16_9").text
@@ -327,8 +375,13 @@ class ProStitcherController:
             spatial_audio = project.find("./audio").attrib['spatial_audio']
             audio_file = project.find("./audio").attrib['file']
             audio_storage_loc = project.find("./audio").attrib['storage_loc']
+            firmware_version = project.find("./version").attrib['firmware']
+            crop_type = project.find("./origin/metadata").attrib['crop_flag']
+            if not crop_type:
+                crop_type = "2"
 
             # update template parameters
+            recording_settings["firmware_version"] = firmware_version
             recording_settings["recording_dir"] = os.path.join(recording_settings["source_dir"], recording_name)
             recording_settings["output_destination"] = output_destination
             recording_settings["recording_name"] = recording_name
@@ -358,6 +411,9 @@ class ProStitcherController:
             recording_settings["start_ts_4"] = start_ts_4
             recording_settings["start_ts_5"] = start_ts_5
             recording_settings["start_ts_6"] = start_ts_6
+            recording_settings["gyro_sweep_time"] = rolling_shutter_time_us
+            recording_settings["gyro_delay_time"] = delay_time_us
+            recording_settings["source_crop_type"] = crop_type
         except Exception as e:
             raise Exception("Error populating recording parameters from project file: " + str(e))
 
@@ -405,7 +461,15 @@ class ProStitcherController:
         recording_settings["blend_capture_time"] = Helpers.parse_int(recording_settings["reference_time"])
         if not recording_settings["blend_capture_time"] or recording_settings["blend_capture_time"] > duration or recording_settings["blend_capture_time"] < 0:
             recording_settings["blend_capture_time"] = Helpers.parse_int(duration/2)
+        # if recording_settings["output_fps"] == "59.94":
+        #     recording_settings["source_crop_type"] = "3"
+        # else:
+        #     recording_settings["source_crop_type"] = "2"
         recording_settings["gyro_enable"] = "1" if recording_settings["flowstate_stabilisation"] else "0"
+        if recording_settings["direction_lock"]:
+            recording_settings["gyro_flowstate_mode"] = "2"
+        else:
+            recording_settings["gyro_flowstate_mode"] = "1"
         recording_settings["blend_smooth_stitch"] = "true" if recording_settings["smooth_stitch"] else "false"
         recording_settings["blend_original_offset"] = "true" if recording_settings["original_offset"] else "false"
         recording_settings["blend_top_fixer"] = "1" if recording_settings["zenith_optimisation"] else "0"
@@ -475,7 +539,7 @@ class ProStitcherController:
             recording_settings["encode_profile"] = "main"
 
         # replace parameters in template
-        recording_template = ProStitcherController.default_template
+        recording_template = ProStitcherController.stitcher_template
         for k, v in recording_settings.items():
             recording_template = recording_template.replace("${}".format(k.upper()), str(v))
 
@@ -528,6 +592,9 @@ class ProStitcherController:
             if os.path.exists(recording_project_file):
                 recording_project_data = Helpers.read_file(recording_project_file)
                 Helpers.write_file(project_filepath, recording_project_data)
+
+                # get stitcher version
+                # stitcher_major_version = ProStitcherController.get_prostitcher_major_version(recording_settings['stitcher_path'])
 
                 # create stitching template for this recording
                 recording_template = self.update_template(recording_settings,
