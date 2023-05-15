@@ -19,7 +19,7 @@ The releases section contains binary distributions for Windows and macOS that we
 
 #### macOS
 
-- Both Intel and Apple CPUs are supported (Apple via Rosetta 2).
+- Both Intel and Apple CPUs are supported (Apple Silicon via Rosetta 2).
 - Open the .dmg file and drag batchstitcher.app and ffprobe to your /Applications folder.
 - When starting the app you may be presented with a Security Warning. 
   - Click OK, then go to System Preferences -> Security & Privacy -> click “Open Anyway”.
@@ -28,13 +28,13 @@ The releases section contains binary distributions for Windows and macOS that we
 
 ### From source
 
-Install your favourite version of Python 3 (3.8 or higher). 
+Install your favourite version of Python 3 (Python 3.8 or higher). See https://www.python.org/downloads/
 
-If you're on macOS and install Python via homebrew, you might have to install python-tk along with your Python 3 installation.
+If you're on macOS and install Python via homebrew, you might have to install python-tk separately.
 
 ```
-brew install python@3.10
-brew install python-tk@3.10
+brew install python@3.11
+brew install python-tk@3.11
 ```
 
 Download or clone the repository, then start batchsticher.py from the command line.
@@ -50,7 +50,8 @@ python3 batchsticher.py
 The stitching process relies on two external programs, which you will have to configure before you can start.
 - **ProStitcher**, which is part of the Insta360Stitcher application.
   - Download: https://www.insta360.com/download/insta360-pro2
-  - Insta360 can provide optimized versions for RTX30xx and Apple Silicon on request.
+  - Insta360 can provide optimized versions for RTX30xx, RTX40xx and Apple Silicon on request.
+  - For convenience Mantis Sub support page contains download links for Stitcher version 3.1.3, which supports RTX20xx, 30xx, and 40xx: https://www.mantis-sub.com/support/#insta360stitcher 
 - **ffprobe**, which is part of the free FFmpeg video utilities. 
   - This is included in the binary distribution, but must be downloaded if you use the source distribution.
   - Download: https://ffmpeg.org/download.html
@@ -66,12 +67,12 @@ At a minimum you must enter the following settings:
   - You may select the Insta360Stitcher folder or the ProStitcher binary
   - Insta360 can provide optimized versions for RTX30xx and Apple Silicon
  
-The other parameters should be familiar from the Insta360Stitcher UI. 
+The other parameters should be familiar from the Insta360 Stitcher UI. 
 
 Some options are named slightly differntly (e.g. pano instead of Monoscopic). 
 This is because the ProStitcher executable uses different configuration strings than the Insta360Stitcher UI. 
 
-The following two settings are of special importance: 
+The following three settings are of special importance: 
 
 - Blender type:
   - Blender type selects the stitching backend (library).
@@ -84,7 +85,7 @@ The following two settings are of special importance:
   - It is recommended to try "opencl" and compare with your default settings to see which one is faster.
 
 - Use hardware encoding: 
-  - If you activate "Use hardware encoding" in the output section, and the encoding settings is not supported by your hardware, you'll see an error message in the progress window that says so (return code 244 - hardware encoding not supported). 
+  - If you activate "Use hardware encoding" in the output section, and the encoding settings are not supported by your hardware, you'll see an error message in the progress window that says so (return code 244 - hardware encoding not supported). 
   - In this case please deactivate "Use hardware encoding" and try again.
 
 - Bitrate:
