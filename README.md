@@ -3,7 +3,7 @@
 
 ## Introduction
 
-This is a Python3 program to stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings.
+Batch Stitcher can stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings. It is written in pure python but calls ffprobe and Insta360 Stitcher binaries to perform video file analysis and stitching.
 
 ## Installation
 
@@ -19,11 +19,12 @@ The releases section contains binary distributions for Windows and macOS that we
 
 #### macOS
 
-- Both Intel and Apple CPUs are supported (Apple Silicon via Rosetta 2).
+- Both Intel and Apple CPUs are supported (Apple Silicon via Rosetta 2) for macOS Big Sur (11.0) and higher.
 - Open the .dmg file and drag batchstitcher.app and ffprobe to your /Applications folder.
 - When starting the app you may be presented with a Security Warning. 
   - Click OK, then go to System Preferences -> Security & Privacy -> click “Open Anyway”.
   - You have to do this for batchsticher as well as ffprobe.
+- If you double-click on the app and nothing happens you likely have macOS 10.15 or lower, which is not supported.
 
 
 ### From source
@@ -107,3 +108,4 @@ The following three settings are of special importance:
 - "Could not save settings" error message on windows.
   - Resolution: Copy the file "batchstitcher.ini" into the folder %APPDATA%/BatchStitcher
   - https://github.com/MantisSub/batchstitcher/releases/download/v0.0.3/batchstitcher.ini
+- If you double-click on the app and nothing happens you likely have macOS 10.15 or lower, which is not supported.
