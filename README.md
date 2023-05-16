@@ -3,7 +3,7 @@
 
 ## Introduction
 
-Batch Stitcher can stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings. It is written in pure python but calls ffprobe and Insta360 Stitcher binaries to perform video file analysis and stitching.
+Batch Stitcher can stitch multiple Insta360 Pro 2 recordings from a common source folder with the same settings. It is written in Python but calls ffprobe and Insta360 Stitcher binaries to perform video file analysis and stitching.
 
 ## Installation
 
