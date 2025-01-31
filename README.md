@@ -97,6 +97,7 @@ The following three settings are of special importance:
 
 ## Problem resolution
 
+- Please do not rename the original recording files (origin_1.mp4, origin_1_lrv.mp4, etc.), or stitching will fail.
 - The progress window should provide enough information if something goes wrong. 
 - Some combinations of Codec / Profile / Bitrate don't work. 
   - In this case you will get an error 244 (Codec/Profile not supported)
