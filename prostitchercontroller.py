@@ -5,9 +5,9 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 """
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2023, Xlvisuals Limited"
+__copyright__ = "Copyright 2025, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -275,16 +275,19 @@ class ProStitcherController:
                                 else:
                                     explanation = "Codec/Profile/Bitrate combination not supported by hardware"
                                     resolution = "Please try again with different settings for Codec/Profile/Bitrate."
+                            elif returncode == 1003:
+                                explanation = "'No such file or directory' error looking for origin files"
+                                resolution = "Please make sure your origin files have the original file names (origin_1.mp4 etc.), and that the path has no special characters."
                             elif returncode == 1012:
-                                explanation = "Codec and file format not compatible"
-                                resolution = "Please try again with different settings for file format."
+                                explanation = "'File format', 'Codec type' and 'Use hardware encoding' settings are not compatible"
+                                resolution = "Please try again with different settings for 'File format', 'Codec type' and 'Use hardware encoding'."
                             elif returncode == 4294967295 or returncode == -11:
                                 explanation = "Wrong output file format or audio type"
                                 resolution = "Please change the output file format and try again."
                             if explanation:
-                                self._log_info(f"WARNING. ProStitcher returned code {returncode} ({explanation}).")
+                                self._log_info(f"ERROR. ProStitcher returned code {returncode} ({explanation}).")
                             else:
-                                self._log_info(f"WARNING. ProStitcher returned code {returncode}.")
+                                self._log_info(f"ERROR. ProStitcher returned code {returncode}.")
                             if resolution:
                                 self._log_info(f"{resolution}\n")
 
@@ -588,6 +591,12 @@ class ProStitcherController:
             # calculate total stitching duration
             stitching_duration = recording_settings["trim_end"] - recording_settings["trim_start"]
 
+            if stitching_duration <= 0:
+                self._log_error(
+                    "ERROR: Stitching duration for {} is {}s. Please check your settings for 'Trim start' and 'Trim end'.".format(
+                        recording, stitching_duration))
+                return result
+
             # read project file
             if os.path.exists(recording_project_file):
                 recording_project_data = Helpers.read_file(recording_project_file)
@@ -610,7 +619,8 @@ class ProStitcherController:
                     pass
 
                 # stitch
-                self._log_info("\nStitching {} (duration: {}s) ".format(recording, int(stitching_duration)))
+                stitching_duration = int(stitching_duration)
+                self._log_info("\nStitching {} (duration: {}s) ".format(recording, stitching_duration))
                 self._log_info(f"ProStitcher: {recording_settings['stitcher_path']}\n"
                                 f"Template: {os.path.abspath(template_filepath)}\n"
                                 f"Logfile: {os.path.abspath(recording_logfile)}\n"
