@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2023-2025, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 __email__ = "info@xlvisuals.com"
 
 import shutil

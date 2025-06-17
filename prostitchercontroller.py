@@ -7,7 +7,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 __author__ = "Axel Busch"
 __copyright__ = "Copyright 2023-2025, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 __email__ = "info@xlvisuals.com"
 
 import sys
@@ -621,6 +621,8 @@ class ProStitcherController:
         # make private copy as we'll change some things for each recording
         recording_settings = copy.deepcopy(self.settings)
 
+        self._log_info("\nProcessing {}".format(recording))
+
         # insert any default settings not present
         for k,v in self.default_parameters.items():
             if k not in recording_settings:
@@ -628,6 +630,7 @@ class ProStitcherController:
 
         preview_filepath = os.path.join(recording_settings["source_dir"], recording, "preview.mp4")
         duration, fps = self._run_ffprobe(recording_settings["ffprobe_path"], preview_filepath)
+
         if duration >= recording_settings["min_recording_duration"]:
 
             # create file paths
@@ -640,13 +643,24 @@ class ProStitcherController:
             recording_logfile = os.path.join(tempdir, recording + "_{}_stitcher.log".format(t))
             parameters_filepath = os.path.join(tempdir, recording + "_{}_parameters.json".format(t))
 
-            # update trim settings from relative to absolute.
-            if recording_settings["trim_start"] < 0 or recording_settings["trim_start"] > duration:
-                recording_settings["trim_start"] = 0
-            if recording_settings["trim_end"] < 0:
+            # update trim end settings from relative to absolute.
+            if not recording_settings["trim_end"]:
+                recording_settings["trim_end"] = duration
+            elif recording_settings["trim_end"] < 0:
+                # set the absolute trim end
                 recording_settings["trim_end"] = duration + recording_settings["trim_end"]
-                if recording_settings["trim_end"] < 0:
-                    recording_settings["trim_end"] = duration
+
+            # trim sanity checks
+            if recording_settings["trim_start"] < 0 or recording_settings["trim_start"] > duration:
+                # Trim start sanity check
+                self._log_info("Warning: Trim start out of bounds, resetting to 0.")
+                recording_settings["trim_start"] = 0
+
+            if recording_settings["trim_end"] < recording_settings["trim_start"] or recording_settings["trim_end"] > duration:
+                # Trim start sanity check
+                self._log_info("Warning: Trim end out of bounds, resetting to end of video ({}).".format(duration))
+                recording_settings["trim_end"] = duration
+
             # calculate total stitching duration
             stitching_duration = recording_settings["trim_end"] - recording_settings["trim_start"]
 
@@ -679,7 +693,7 @@ class ProStitcherController:
 
                 # stitch
                 stitching_duration = int(stitching_duration)
-                self._log_info("\nStitching {} (duration: {}s) ".format(recording, stitching_duration))
+                self._log_info("Stitching {} (stitching {}s of total {}s) ".format(recording, stitching_duration, duration))
                 self._log_info(f"ProStitcher: {recording_settings['stitcher_path']}\n"
                                 f"Template: {os.path.abspath(template_filepath)}\n"
                                 f"Logfile: {os.path.abspath(recording_logfile)}\n"
