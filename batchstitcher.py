@@ -5,9 +5,9 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 """
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2023, Xlvisuals Limited"
+__copyright__ = "Copyright 2023-2025, Xlvisuals Limited"
 __license__ = "GPL-2.1"
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 __email__ = "info@xlvisuals.com"
 
 import shutil
@@ -322,6 +322,28 @@ class BatchStitcher():
         if not os.path.isfile(ffile):
             messagebox.showwarning(title="Warning", message="No ffprobe executable selected.")
 
+    def _on_select_logo(self):
+        ifile = self.settings_stringvars["logo_path"].get() or None
+        if ifile:
+            idir = os.path.dirname(ifile)
+        else:
+            idir = None
+
+        filetypes = [("Image files", "*.jpg *.jepg *.png"),]
+
+        lfile = filedialog.askopenfilename(initialfile=ifile,
+                                           initialdir=idir,
+                                           filetypes=filetypes,
+                                           title="Please select the logo")
+        if lfile:
+            self.settings_stringvars["logo_path"].set(lfile)
+            self.settings_widgets["logo_path"].delete(0, tk.END)
+            self.settings_widgets["logo_path"].insert(0, lfile)
+        if not os.path.isfile(lfile):
+            self.settings_stringvars["logo_path"] = None
+            self.settings_widgets["logo_path"] = None
+
+
     def _on_cancel(self):
         if self._stitcher:
             self._stitcher.stop()
@@ -503,6 +525,7 @@ class BatchStitcher():
                                  ("target_dir", 'Output folder:', self._on_select_target_dir),
                                  ("stitcher_path", 'ProStitcher executable:', self._on_select_prostitcher),
                                  ("ffprobe_path", 'FFprobe executable:', self._on_select_ffprobe)]
+
         for swb in settings_with_buttons:
             row_s += 1
             k = swb[0]
@@ -519,8 +542,9 @@ class BatchStitcher():
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
-                                                values=("1", "2", "3", "4"))
+                                                values=("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].unbind_class("TCombobox", "<MouseWheel>")  # Windows & OSX
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="values >1 depend on available VRAM.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
@@ -568,7 +592,7 @@ class BatchStitcher():
 
         row_s += 1
         k = "blend_mode"
-        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Stitching mode:", anchor='e', width=25)
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Content type:", anchor='e', width=25)
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
@@ -576,6 +600,34 @@ class BatchStitcher():
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
         ttk.Label(self.scroll_frame, text="Default is pano (= Monoscopic)", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
+
+        row_s += 1
+        k = "stitching_mode"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Stitching mode:", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
+                                                textvariable=self.settings_stringvars[k],
+                                                values=("New Optical Flow", "Optical Flow", "Scene-specific Template"))
+        self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="Default is New Optical Flow", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
+        row_s += 1
+        k = "blend_angle_optical"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Optical flow stitching range", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k], width=self.editor_width)
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="10 to 20, default is 20", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        row_s += 1
+
+        k = "blend_angle_template"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Template stitching range", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k], width=self.editor_width)
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="0.1 to 20, default is 0.5", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
         row_s += 1
         k = "blender_type"
@@ -674,6 +726,25 @@ class BatchStitcher():
         row_s += 1
         ttk.Label(self.scroll_frame, text="<0: Stop before x seconds from end", anchor='w').grid(
             row=row_s, column=2, padx=2, pady=2, sticky="w")
+
+        row_s += 1
+        k = "logo_path"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Logo path:", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k], width=self.editor_width)
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        self.settings_buttons[k] = ttk.Button(self.scroll_frame, text='...', command=self._on_select_logo, width=10)
+        self.settings_buttons[k].grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+        row_s += 1
+
+        k = "logo_angle"
+        self.settings_labels[k] = ttk.Label(self.scroll_frame, text="Logo angle", anchor='e', width=25)
+        self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
+        self.settings_widgets[k] = ttk.Entry(self.scroll_frame, textvariable=self.settings_stringvars[k],
+                                             width=self.editor_width)
+        self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
+        ttk.Label(self.scroll_frame, text="0 to 60. Default is 30 (= 100% zoom)", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
 
         row_s += 1
         ttk.Label(self.scroll_frame, text="Orientation", anchor='se', font=('Arial',16, 'underline')).grid(row=row_s, column=0, padx=2, pady=12, sticky="e")
@@ -815,11 +886,14 @@ class BatchStitcher():
         self.settings_labels[k].grid(row=row_s, column=0, padx=2, pady=2, sticky="e")
         self.settings_widgets[k] = ttk.Combobox(self.scroll_frame,
                                                 textvariable=self.settings_stringvars[k],
-                                                values=("default", "none"))
+                                                values=("default", "normal", "pano", "none"))
         self.settings_widgets[k].config(width=self.editor_width-2, state="readonly")
         self.settings_widgets[k].grid(row=row_s, column=1, padx=2, pady=2, sticky="w")
-        ttk.Label(self.scroll_frame, text="'Default' uses audio type of the recording.", anchor='w').grid(row=row_s, column=2, padx=2,
+        ttk.Label(self.scroll_frame, text="'Default' uses audio type of the recording. ", anchor='w').grid(row=row_s, column=2, padx=2,
                                                                                         pady=2, sticky="w")
+        row_s += 1
+        ttk.Label(self.scroll_frame, text="'normaln is for stereo, 'pano' is for spatial.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
+
         row_s += 1
         ttk.Label(self.scroll_frame, text="Set to 'none' for no audio.", anchor='w').grid(row=row_s, column=2, padx=2, pady=2, sticky="w")
 
@@ -873,6 +947,18 @@ class BatchStitcher():
         self.button_cancel.grid(row=row, column=0, padx=(100,0), pady=(15,50), sticky="w")
         self.button_start = ttk.Button(text='Start', command=self._on_start, width=self.button_width)
         self.button_start.grid(row=row, column=2, padx=(0,100), pady=(15,50), sticky="e")
+
+        # def _on_mouse_wheel(event):
+        #     if isinstance(event.widget, str):  # String because it does not have an actual reference
+        #         if event.widget.endswith('.!combobox.popdown.f.l'):  # If it is the listbox
+        #             return 'break'
+        #     elif isinstance(event.widget, ttk.Combobox):
+        #         return 'break'
+        #     else:
+        #         self.scroll_canvas.yview_scroll(-1 * int((event.delta / 120)), "units")  # Else scroll the canvas
+        #         event.widget.event_generate('<Escape>')  # Close combobox
+        #
+        # self.root.bind_all("<MouseWheel>", _on_mouse_wheel)
 
         # update theme
         self.set_theme(0)

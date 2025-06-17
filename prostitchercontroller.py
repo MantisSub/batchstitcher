@@ -5,7 +5,7 @@ Stitch multiple VID_xxx recording projects captured with Insta360 Pro 2
 """
 
 __author__ = "Axel Busch"
-__copyright__ = "Copyright 2025, Xlvisuals Limited"
+__copyright__ = "Copyright 2023-2025, Xlvisuals Limited"
 __license__ = "GPL-2.1"
 __version__ = "0.0.8"
 __email__ = "info@xlvisuals.com"
@@ -46,6 +46,9 @@ class ProStitcherController:
         "decode_hardware_count": 6,
         "decode_use_hardware": 1,
         "blend_mode": "pano",
+        "stitching_mode": "New Optical Flow",
+        "blend_angle_template": "0.5",
+        "blend_angle_optical": "20",
         "output_codec": "h264",
         "output_format": "mp4",
         "width": 7680,
@@ -78,7 +81,10 @@ class ProStitcherController:
         "roll_x": 0.0,
         "tilt_y": 0.0,
         "pan_z": 0.0,
-        "reference_time": 0
+        "reference_time": 0,
+        "logo_path": None,
+        "logo_angle": "30",
+        "logo_node": ""
     }
 
     default_parameters = {
@@ -92,9 +98,9 @@ class ProStitcherController:
         "blend_use_optical_flow": "1",
         "blend_new_optical_flow": "1",
         "blend_angle_template": "0.5",
+        "blend_angle_optical": "20",
         "blend_top_fixer": "0",
-        "blend_angle_optical": "20",  
-        "blend_mode": "pano",  
+        "blend_mode": "pano",
         "blend_smooth_stitch": "true",
         "blend_original_offset": "true",
         "blend_vr180_lens_selection": "<lensSelection/>",  
@@ -135,7 +141,10 @@ class ProStitcherController:
         "diff_quat_x": 0,
         "diff_quat_y": 0,
         "diff_quat_z": 0,
-        "diff_quat_w": 1
+        "diff_quat_w": 1,
+        "logo_path": None,
+        "logo_angle": "30",
+        "logo_node": ""
     }
 
     vr180_lens_selection = """
@@ -205,6 +214,7 @@ class ProStitcherController:
         <calibration gravity_x="$GRAVITY_X" gravity_y="$GRAVITY_Y" gravity_z="$GRAVITY_Z"/>
         <angle diff_pan="0" diff_tilt="0" diff_roll="0" diff_quatx="$DIFF_QUAT_X" diff_quaty="$DIFF_QUAT_Y" diff_quatz="$DIFF_QUAT_Z" diff_quatw="$DIFF_QUAT_W" distance="603.3333333333334"/>
       </gyro>
+      $LOGO_NODE
       <color brightness="$COLOR_BRIGHTNESS" contrast="$COLOR_CONTRAST" highlight="$COLOR_HIGHLIGHT" shadow="$COLOR_SHADOW" saturation="$COLOR_SATURATION" tempture="$COLOR_TEMPERATURE" tint="$COLOR_TINT" sharpness="$COLOR_SHARPNESS"/>
       <depthMap enable="0" path="" inverse="1"/>
       <output width="$OUTPUT_WIDTH" height="$OUTPUT_HEIGHT" dst="$OUTPUT_DESTINATION" type="$OUTPUT_TYPE">
@@ -282,8 +292,8 @@ class ProStitcherController:
                                 explanation = "'File format', 'Codec type' and 'Use hardware encoding' settings are not compatible"
                                 resolution = "Please try again with different settings for 'File format', 'Codec type' and 'Use hardware encoding'."
                             elif returncode == 4294967295 or returncode == -11:
-                                explanation = "Wrong output file format or audio type"
-                                resolution = "Please change the output file format and try again."
+                                explanation = "Wrong output file format or audio type, or logo not found."
+                                resolution = "Please change the output file format and check the logo path, then try again."
                             if explanation:
                                 self._log_info(f"ERROR. ProStitcher returned code {returncode} ({explanation}).")
                             else:
@@ -460,6 +470,55 @@ class ProStitcherController:
             recording_settings["blend_angle_optical"] = "20"
             recording_settings["output_width"] = str(int(recording_settings["width"]))
             recording_settings["output_height"] = str(int(recording_settings["width"]/2))
+
+        if recording_settings["stitching_mode"] == "New Optical Flow":
+            recording_settings["blend_use_optical_flow"] = "1"
+            recording_settings["blend_new_optical_flow"] = "1"
+        elif recording_settings["stitching_mode"] == "Optical Flow":
+            recording_settings["blend_use_optical_flow"] = "1"
+            recording_settings["blend_new_optical_flow"] = "0"
+        elif recording_settings["stitching_mode"] == "Scene-specific Template":
+            recording_settings["blend_use_optical_flow"] = "0"
+            recording_settings["blend_new_optical_flow"] = "0"
+
+        if recording_settings["blend_angle_optical"]:
+            try:
+                blend_angle_optical = Helpers.parse_float(recording_settings["blend_angle_optical"])
+                if blend_angle_optical < 10:
+                    recording_settings["blend_angle_optical"] = "10"
+                elif blend_angle_optical > 20:
+                    recording_settings["blend_angle_optical"] = "20"
+                else:
+                    recording_settings["blend_angle_template"] = f"{blend_angle_optical}"
+            except:
+                recording_settings["blend_angle_optical"] = self.default_parameters["blend_angle_optical"]
+
+        if recording_settings["blend_angle_template"]:
+            try:
+                blend_angle_template = Helpers.parse_float(recording_settings["blend_angle_template"])
+                if blend_angle_template < 0.1:
+                    recording_settings["blend_angle_template"] = "0.1"
+                elif blend_angle_template > 20:
+                    recording_settings["blend_angle_template"] = "20"
+                else:
+                    recording_settings["blend_angle_template"] = f"{blend_angle_template}"
+            except:
+                recording_settings["blend_angle_template"] = self.default_parameters["blend_angle_template"]
+
+        recording_settings["logo_node"] = ''
+        if recording_settings["logo_path"] and str(recording_settings["logo_path"]).lower() != 'none':
+            try:
+                logo_path = recording_settings["logo_path"]
+                logo_angle = Helpers.parse_float(recording_settings["logo_angle"])
+                if logo_angle < 1:
+                    recording_settings["logo_angle"] = "1"
+                elif logo_angle > 60:
+                    recording_settings["logo_angle"] = "60"
+                else:
+                    recording_settings["logo_angle"] = f"{logo_angle}"
+                recording_settings["logo_node"] = f'<logo src="{logo_path}" angle="{logo_angle}"/>'
+            except:
+                recording_settings["logo_node"] = ''
 
         recording_settings["blend_capture_time"] = Helpers.parse_int(recording_settings["reference_time"])
         if not recording_settings["blend_capture_time"] or recording_settings["blend_capture_time"] > duration or recording_settings["blend_capture_time"] < 0:
